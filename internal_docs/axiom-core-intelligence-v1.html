@@ -1,0 +1,2109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AXIOM — Complete Intelligence Architecture v1.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #07060a;
+  --s1:        #0c0b10;
+  --s2:        #111018;
+  --s3:        #171520;
+  --border:    #221d2e;
+  --borderb:   #332848;
+  --amber:     #ffaa3b;
+  --orange:    #ff6b35;
+  --gold:      #ffd166;
+  --purple:    #c97dff;
+  --violet:    #8b5cf6;
+  --green:     #6bffaa;
+  --teal:      #3fffd2;
+  --red:       #ff4455;
+  --pink:      #ff6b9d;
+  --ice:       #a8d8ff;
+  --text:      #cdc2c8;
+  --textb:     #ede5ea;
+  --textd:     #4a4050;
+  --mono:      'Space Mono', monospace;
+  --display:   'Syne', sans-serif;
+  --serif:     'DM Serif Display', serif;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-x: hidden;
+}
+
+/* ── GRAIN + ATMOSPHERE ── */
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background:
+    radial-gradient(ellipse 100% 80% at 10% 0%, rgba(255,170,59,.035) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 90% 80%, rgba(201,125,255,.025) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(107,255,170,.012) 0%, transparent 60%),
+    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,140,66,.005) 3px, rgba(255,140,66,.005) 4px);
+  pointer-events:none;
+  z-index:0;
+}
+
+.page{max-width:1440px;margin:0 auto;padding:72px 56px;position:relative;z-index:1}
+
+/* ── NAV ── */
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: rgba(7,6,10,.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 56px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 44px;
+  overflow-x: auto;
+}
+.nav-logo {
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--amber);
+  letter-spacing: 3px;
+  white-space: nowrap;
+  margin-right: 32px;
+  flex-shrink: 0;
+}
+.nav a {
+  font-size: 9px;
+  color: var(--textd);
+  text-decoration: none;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 0 14px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  border-right: 1px solid var(--border);
+  transition: color .2s;
+}
+.nav a:hover{color:var(--amber)}
+.nav a:first-of-type{border-left:1px solid var(--border)}
+
+/* ── HEADER ── */
+.header {
+  padding-top: 60px;
+  padding-bottom: 64px;
+  border-bottom: 1px solid var(--borderb);
+  margin-bottom: 80px;
+  position: relative;
+}
+.header-eyebrow {
+  font-size: 9px;
+  letter-spacing: 5px;
+  color: var(--textd);
+  text-transform: uppercase;
+  margin-bottom: 28px;
+}
+.header-title {
+  font-family: var(--display);
+  font-size: clamp(72px, 11vw, 128px);
+  font-weight: 900;
+  line-height: .85;
+  letter-spacing: -5px;
+  color: var(--textb);
+  margin-bottom: 8px;
+}
+.header-title em {
+  font-style: normal;
+  color: var(--amber);
+}
+.header-subtitle {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-style: italic;
+  color: var(--textd);
+  margin-top: 20px;
+  letter-spacing: .5px;
+}
+.header-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 32px;
+}
+.tag {
+  font-size: 9px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border: 1px solid;
+}
+.t-amber{border-color:var(--amber);color:var(--amber)}
+.t-orange{border-color:var(--orange);color:var(--orange)}
+.t-purple{border-color:var(--purple);color:var(--purple)}
+.t-green{border-color:var(--green);color:var(--green)}
+.t-teal{border-color:var(--teal);color:var(--teal)}
+.t-ice{border-color:var(--ice);color:var(--ice)}
+.t-red{border-color:var(--red);color:var(--red)}
+.t-gold{border-color:var(--gold);color:var(--gold)}
+
+/* ── SECTION ── */
+.section{margin-bottom:96px}
+.sec-eyebrow{
+  font-size:9px;letter-spacing:5px;color:var(--amber);
+  text-transform:uppercase;margin-bottom:8px;display:block;
+}
+.sec-title{
+  font-family:var(--display);font-size:28px;font-weight:800;
+  color:var(--textb);margin-bottom:28px;letter-spacing:-1px;
+}
+.sec-title span{color:var(--amber)}
+
+/* ── DIVIDER ── */
+.div{border:none;border-top:1px solid var(--border);margin:72px 0}
+.sweep{
+  width:100%;height:1px;margin:20px 0;
+  background:linear-gradient(90deg,transparent,var(--amber),transparent);
+  opacity:.2;animation:sw 6s ease-in-out infinite;
+}
+@keyframes sw{0%,100%{opacity:.08}50%{opacity:.28}}
+
+/* ── PHILOSOPHY BLOCK ── */
+.phil{
+  background:linear-gradient(135deg,rgba(255,170,59,.04),rgba(201,125,255,.03));
+  border:1px solid var(--borderb);
+  border-left:3px solid var(--amber);
+  padding:32px 36px;margin-bottom:24px;
+}
+.phil-title{
+  font-family:var(--display);font-size:16px;font-weight:700;
+  color:var(--amber);margin-bottom:12px;
+}
+.phil p{color:var(--text);line-height:2;max-width:1000px}
+.phil p+p{margin-top:10px}
+.phil code{font-size:11px;color:var(--gold);background:var(--s2);padding:1px 6px;border:1px solid var(--border)}
+.phil strong{color:var(--textb);font-weight:700}
+
+/* ── COMPARISON GRID ── */
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);margin:28px 0}
+.cmp-col{padding:28px 32px}
+.cmp-col+.cmp-col{border-left:1px solid var(--border)}
+.cmp-label{font-size:9px;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px;display:block}
+.cmp-item{
+  font-size:11.5px;color:var(--textd);
+  padding:8px 12px;margin-bottom:6px;
+  border-left:2px solid;line-height:1.7;
+}
+.bad{border-color:var(--red);background:rgba(255,68,85,.04)}
+.good{border-color:var(--green);background:rgba(107,255,170,.04)}
+.cmp-item strong{color:var(--text);font-weight:400}
+
+/* ── PHASE GRID ── */
+.phase-row{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:1px;background:var(--border);
+  border:1px solid var(--border);margin:28px 0;
+}
+.phase{
+  background:var(--bg);padding:28px 26px;
+  position:relative;overflow:hidden;
+}
+.phase::before{
+  content:attr(data-n);position:absolute;
+  top:-10px;right:14px;
+  font-family:var(--display);font-size:90px;
+  font-weight:900;opacity:.04;color:white;line-height:1;
+}
+.phase-num{font-size:9px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;display:block}
+.phase-name{
+  font-family:var(--display);font-size:18px;
+  font-weight:800;color:var(--textb);
+  margin-bottom:6px;letter-spacing:-.5px;
+}
+.phase-sub{font-size:10px;color:var(--textd);margin-bottom:12px;letter-spacing:1px}
+.phase-body{font-size:11.5px;color:var(--textd);line-height:1.8}
+.phase-body code{font-size:10px;color:var(--gold);background:var(--s2);padding:1px 4px;border:1px solid var(--border)}
+.phase-pill{
+  display:inline-block;margin-top:12px;
+  font-size:9px;padding:4px 10px;border:1px solid;letter-spacing:1.5px;
+}
+
+/* ── LAYER TABLE ── */
+.ltable{width:100%;border-collapse:collapse;margin:24px 0}
+.ltable th{
+  text-align:left;font-size:9px;letter-spacing:2px;
+  color:var(--textd);padding:8px 16px;
+  border-bottom:1px solid var(--border);
+  font-weight:400;text-transform:uppercase;
+}
+.ltable td{
+  padding:13px 16px;border-bottom:1px solid var(--border);
+  font-size:11.5px;vertical-align:top;line-height:1.65;
+}
+.ltable tr:hover td{background:var(--s2)}
+.ltable td:first-child{
+  font-family:var(--display);font-size:13px;
+  font-weight:700;color:var(--textb);white-space:nowrap;
+}
+.ltable code{font-size:10px;color:var(--gold);background:var(--s2);padding:1px 5px;border:1px solid var(--border)}
+.ltable .dim{color:var(--textd)}
+
+/* ── CODE BLOCK ── */
+.codeblock{
+  background:var(--s1);border:1px solid var(--border);
+  padding:24px 28px;margin:20px 0;
+  overflow-x:auto;position:relative;
+}
+.codeblock::before{
+  content:attr(data-label);
+  position:absolute;top:10px;right:14px;
+  font-size:8px;color:var(--textd);letter-spacing:3px;
+}
+.codeblock pre{
+  font-family:var(--mono);font-size:11.5px;
+  color:var(--textb);line-height:1.75;
+  white-space:pre;
+}
+.c-amber{color:var(--amber)}
+.c-green{color:var(--green)}
+.c-purple{color:var(--purple)}
+.c-gold{color:var(--gold)}
+.c-teal{color:var(--teal)}
+.c-orange{color:var(--orange)}
+.c-ice{color:var(--ice)}
+.c-red{color:var(--red)}
+.c-dim{color:var(--textd)}
+
+/* ── METRIC CARDS ── */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin:28px 0}
+.metric{background:var(--bg);padding:24px 20px}
+.metric-val{
+  font-family:var(--display);font-size:30px;
+  font-weight:900;letter-spacing:-1px;
+  color:var(--textb);display:block;
+  margin-bottom:4px;
+}
+.metric-label{font-size:9px;color:var(--textd);letter-spacing:2px;text-transform:uppercase;display:block;margin-bottom:8px}
+.metric-sub{font-size:10.5px;color:var(--textd);line-height:1.6}
+
+/* ── INVARIANT ── */
+.invariant{
+  border:1px solid var(--amber);
+  background:rgba(255,170,59,.04);
+  padding:24px 28px;margin:20px 0;
+}
+.invariant-title{
+  font-size:9px;letter-spacing:3px;color:var(--amber);
+  text-transform:uppercase;margin-bottom:12px;display:block;
+}
+.invariant ol,.invariant ul{padding-left:18px}
+.invariant li{font-size:11.5px;color:var(--text);line-height:2;margin-bottom:2px}
+.invariant li code{font-size:10px;color:var(--gold);background:var(--s2);padding:1px 5px;border:1px solid var(--border)}
+
+/* ── TWO COL ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:24px 0}
+.col-box{background:var(--s1);border:1px solid var(--border);padding:24px 26px}
+.col-box-title{
+  font-family:var(--display);font-size:14px;font-weight:700;
+  color:var(--textb);margin-bottom:12px;
+  padding-bottom:10px;border-bottom:1px solid var(--border);
+}
+.col-box ul{list-style:none;padding:0}
+.col-box li{
+  font-size:11.5px;color:var(--text);line-height:1.75;
+  padding:5px 0;border-bottom:1px solid var(--border);
+}
+.col-box li:last-child{border-bottom:none}
+.col-box li::before{content:'→ ';color:var(--amber)}
+.col-box code{font-size:10px;color:var(--gold);background:var(--s2);padding:1px 4px;border:1px solid var(--border)}
+
+/* ── ALGO CARDS ── */
+.algo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:24px 0}
+.algo-card{
+  background:var(--s1);border:1px solid var(--border);
+  padding:24px 26px;position:relative;overflow:hidden;
+}
+.algo-card::after{
+  content:attr(data-algo);
+  position:absolute;bottom:-8px;right:12px;
+  font-family:var(--display);font-size:52px;
+  font-weight:900;opacity:.05;color:white;
+}
+.algo-name{
+  font-family:var(--display);font-size:15px;
+  font-weight:800;color:var(--textb);
+  margin-bottom:4px;
+}
+.algo-full{font-size:9px;color:var(--textd);letter-spacing:2px;margin-bottom:12px;display:block;text-transform:uppercase}
+.algo-body{font-size:11.5px;color:var(--textd);line-height:1.8}
+.algo-body strong{color:var(--text)}
+.algo-mapping{
+  margin-top:12px;padding:10px 14px;
+  background:var(--s2);border-left:2px solid var(--amber);
+  font-size:11px;color:var(--text);line-height:1.7;
+}
+
+/* ── SECURITY STACK ── */
+.sec-stack{display:flex;flex-direction:column;gap:0;margin:24px 0;border:1px solid var(--border)}
+.sec-layer{
+  padding:20px 28px;border-bottom:1px solid var(--border);
+  display:grid;grid-template-columns:200px 1fr;gap:24px;
+  align-items:start;
+}
+.sec-layer:last-child{border-bottom:none}
+.sec-layer-name{
+  font-family:var(--display);font-size:13px;
+  font-weight:700;color:var(--textb);
+}
+.sec-layer-tag{font-size:9px;color:var(--textd);letter-spacing:2px;margin-top:4px;display:block}
+.sec-layer-body{font-size:11.5px;color:var(--textd);line-height:1.8}
+.sec-layer-body strong{color:var(--text)}
+.sec-layer-body code{font-size:10px;color:var(--gold);background:var(--s2);padding:1px 5px;border:1px solid var(--border)}
+
+/* ── CL GRID ── */
+.cl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin:24px 0}
+.cl-card{background:var(--bg);padding:24px 20px;position:relative;overflow:hidden}
+.cl-num{
+  font-family:var(--display);font-size:48px;
+  font-weight:900;opacity:.08;position:absolute;
+  top:-8px;right:8px;color:white;
+}
+.cl-label{font-size:9px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;display:block}
+.cl-name{font-family:var(--display);font-size:16px;font-weight:800;color:var(--textb);margin-bottom:8px}
+.cl-body{font-size:11px;color:var(--textd);line-height:1.8}
+.cl-unlock{
+  margin-top:12px;font-size:9px;
+  padding:4px 10px;border:1px solid;
+  display:inline-block;letter-spacing:1.5px;
+}
+
+/* ── MFT DIAGRAM ── */
+.mft-box{
+  background:var(--s1);border:1px solid var(--borderb);
+  padding:48px;margin:28px 0;position:relative;
+  overflow:hidden;
+}
+.mft-box::before{
+  content:'topology_router.pt';
+  position:absolute;bottom:14px;right:20px;
+  font-size:9px;color:var(--borderb);letter-spacing:3px;
+}
+.mft-title{
+  font-family:var(--display);font-size:22px;
+  font-weight:800;color:var(--textb);
+  margin-bottom:20px;letter-spacing:-.5px;
+}
+.mft-eq{
+  font-family:var(--serif);font-size:18px;
+  font-style:italic;color:var(--amber);
+  margin:12px 0;display:block;letter-spacing:.5px;
+}
+.mft-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:24px}
+.mft-cell{
+  background:var(--s2);border:1px solid var(--border);
+  padding:16px 18px;
+}
+.mft-cell-label{font-size:9px;color:var(--textd);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;display:block}
+.mft-cell-val{font-size:12px;color:var(--text);line-height:1.7}
+.mft-cell-val strong{color:var(--textb)}
+
+/* ── STORE FILES ── */
+.store-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:24px 0}
+.store-file{
+  background:var(--s1);border:1px solid var(--border);
+  padding:24px 26px;
+}
+.store-file-name{
+  font-family:var(--mono);font-size:13px;
+  color:var(--gold);margin-bottom:4px;
+}
+.store-file-role{
+  font-family:var(--display);font-size:15px;
+  font-weight:700;color:var(--textb);
+  margin-bottom:12px;
+}
+.store-file-body{font-size:11.5px;color:var(--textd);line-height:1.8}
+.store-file-body strong{color:var(--text)}
+.store-not{
+  margin-top:14px;padding:10px 14px;
+  background:var(--s2);border-left:2px solid var(--red);
+  font-size:10.5px;color:var(--textd);line-height:1.7;
+}
+.store-not::before{content:'NOT: ';color:var(--red)}
+
+/* ── TOPOLOGY CLASS TABLE ── */
+.topo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin:24px 0}
+.topo-cell{background:var(--bg);padding:14px 16px}
+.topo-class{font-family:var(--mono);font-size:10px;color:var(--gold);margin-bottom:4px}
+.topo-parent{font-size:9px;color:var(--textd);margin-bottom:4px}
+.topo-desc{font-size:11px;color:var(--textd);line-height:1.6}
+
+/* ── PIPELINE FLOW ── */
+.pipe-flow{
+  background:var(--s1);border:1px solid var(--border);
+  padding:40px 48px;margin:24px 0;
+}
+.pipe-row{display:flex;align-items:center;gap:0;margin-bottom:0}
+.pipe-node{
+  border:1px solid;padding:10px 18px;
+  text-align:center;flex-shrink:0;
+}
+.pipe-node .p-label{font-size:9px;color:inherit;opacity:.7;display:block;letter-spacing:1.5px;margin-bottom:2px}
+.pipe-node .p-name{font-family:var(--display);font-size:12px;font-weight:700}
+.pipe-node .p-sub{font-size:9px;opacity:.6;display:block;margin-top:2px}
+.pipe-arr{
+  flex:1;height:1px;background:var(--borderb);
+  position:relative;min-width:20px;
+}
+.pipe-arr::after{
+  content:'▶';position:absolute;
+  right:-7px;top:50%;transform:translateY(-50%);
+  font-size:8px;color:var(--borderb);
+}
+.pipe-arr-label{
+  position:absolute;top:-16px;left:50%;
+  transform:translateX(-50%);
+  font-size:9px;color:var(--textd);
+  white-space:nowrap;letter-spacing:1px;
+}
+.pipe-down{width:1px;height:24px;background:var(--borderb);margin:0 auto;position:relative}
+.pipe-down::after{
+  content:'▼';position:absolute;
+  bottom:-9px;left:50%;transform:translateX(-50%);
+  font-size:8px;color:var(--borderb);
+}
+
+/* ── RLCPC ── */
+.rlcpc-box{
+  background:linear-gradient(135deg,rgba(201,125,255,.04),rgba(139,92,246,.03));
+  border:1px solid var(--purple);
+  padding:36px 40px;margin:28px 0;
+  position:relative;overflow:hidden;
+}
+.rlcpc-box::after{
+  content:'INVISIBLE LAYER';
+  position:absolute;top:14px;right:20px;
+  font-size:9px;color:rgba(201,125,255,.3);
+  letter-spacing:4px;
+}
+.rlcpc-title{
+  font-family:var(--display);font-size:20px;
+  font-weight:800;color:var(--purple);
+  margin-bottom:16px;letter-spacing:-.5px;
+}
+
+/* ── FLOW ARROWS BIG ── */
+.flow-big{
+  background:var(--s1);border:1px solid var(--border);
+  padding:36px 40px;margin:24px 0;
+}
+.flow-big-title{
+  font-size:9px;letter-spacing:3px;color:var(--textd);
+  text-transform:uppercase;margin-bottom:24px;
+}
+.flow-line{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:12px;flex-wrap:wrap;
+}
+.flow-box{
+  border:1px solid var(--border);
+  padding:8px 14px;font-size:11px;
+  color:var(--text);flex-shrink:0;
+}
+.flow-box.hi{border-color:var(--amber);color:var(--amber);background:rgba(255,170,59,.05)}
+.flow-box.purple{border-color:var(--purple);color:var(--purple);background:rgba(201,125,255,.05)}
+.flow-box.green{border-color:var(--green);color:var(--green);background:rgba(107,255,170,.05)}
+.flow-arr{color:var(--textd);font-size:11px;flex-shrink:0}
+.flow-note{font-size:10px;color:var(--textd);letter-spacing:1px}
+
+/* ── FOOTER ── */
+.footer{
+  border-top:1px solid var(--border);
+  padding-top:48px;margin-top:96px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.footer-left{font-family:var(--display);font-size:28px;font-weight:900;color:var(--textb);letter-spacing:-1px}
+.footer-left span{color:var(--amber)}
+.footer-right{font-size:10px;color:var(--textd);letter-spacing:3px;text-align:right;line-height:2}
+
+@media(max-width:900px){
+  .page{padding:60px 24px}
+  .nav{padding:0 24px}
+  .two-col,.cmp,.metrics,.algo-grid,.cl-grid,.store-grid,.topo-grid,.mft-grid{grid-template-columns:1fr}
+  .phase-row{grid-template-columns:1fr}
+  .cmp-col+.cmp-col{border-left:none;border-top:1px solid var(--border)}
+  .sec-layer{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-logo">AXIOM</div>
+  <a href="#premise">Premise</a>
+  <a href="#philosophy">Philosophy</a>
+  <a href="#phases">Phases</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#mft">MFT</a>
+  <a href="#wlm">WLM</a>
+  <a href="#wlp">WLP</a>
+  <a href="#kernel">Signal Kernel</a>
+  <a href="#topology">Topology</a>
+  <a href="#store">Store</a>
+  <a href="#algorithms">Algorithms</a>
+  <a href="#security">Security</a>
+  <a href="#rlcpc">RLCPC</a>
+  <a href="#clearance">Clearance</a>
+  <a href="#invariants">Invariants</a>
+  <a href="#intent">Intent Extraction</a>
+</nav>
+
+<div class="page">
+
+<!-- ═══════════════════════════════════════════════════════════════════ HEADER -->
+<header class="header">
+  <div class="header-eyebrow">AXIOM // CORE INTELLIGENCE ARCHITECTURE // v1.0 // UNIFIED SPECIFICATION // INTERNAL</div>
+  <div class="header-title"><em>AX</em>IOM</div>
+  <div class="header-subtitle">Topology-Addressed Generation — The web as a typed system, knowledge as structure, routing as memory</div>
+  <div class="header-meta">
+    <span class="tag t-amber">TAG not RAG</span>
+    <span class="tag t-orange">Weights as Index</span>
+    <span class="tag t-purple">MFT O(1) Lookup</span>
+    <span class="tag t-green">Three-Phase Cognition</span>
+    <span class="tag t-teal">Loop Never Terminates</span>
+    <span class="tag t-ice">No Vector Database</span>
+    <span class="tag t-gold">99.27% Compression</span>
+    <span class="tag t-red">Adversarial Web Ready</span>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════ PREMISE -->
+<section class="section" id="premise">
+  <span class="sec-eyebrow">01 — Core Premise</span>
+  <div class="sec-title">TAG not RAG — <span>The Fundamental Inversion</span></div>
+
+  <div class="phil">
+    <div class="phil-title">The Problem with RAG</div>
+    <p>Retrieval-Augmented Generation assumes the hard problem is retrieval and embedding. It throws vector databases, chunking strategies, and semantic search at a black box web it has never learned to read. The cleaning is an afterthought: strip some HTML tags, maybe run a readability heuristic, hope for the best. Every query starts from zero. The system never gets smarter.</p>
+    <p>RAG believes meaning is <strong>proximity in vector space</strong>. A filing cabinet metaphor dressed in mathematics. Store everything. Retrieve by similarity. The web is an undifferentiated mass of bytes to be ingested, chunked, and embedded without understanding what any of it structurally is.</p>
+  </div>
+
+  <div class="phil">
+    <div class="phil-title">The TAG Inversion</div>
+    <p>Topology-Addressed Generation assumes the hard problem is <strong>knowing what the page is before you touch it</strong>. The WLM classifies topology before bytes arrive. When the extraction pipeline runs, it already knows: Is this a REST JSON endpoint or a Docusaurus doc page? Is there a paywall wrapper polluting the DOM? Is the code block lazy-loaded or server-rendered? What depth of link traversal is actually signal vs noise?</p>
+    <p>TAG believes meaning is <strong>location in structure space</strong>. A navigation metaphor. The web is a typed system with known structural classes. Inference infrastructure predicts those classes before the fetch. The extraction is topology-class-aware — not generic stripping, not statistical heuristics, but a <strong>compiled policy executing against known structure</strong>.</p>
+  </div>
+
+  <div class="cmp">
+    <div class="cmp-col">
+      <span class="cmp-label" style="color:var(--red)">RAG — What it does</span>
+      <div class="cmp-item bad"><strong>Retrieves by cosine similarity.</strong> Meaning = proximity in vector space. Correct by accident, not by structure.</div>
+      <div class="cmp-item bad"><strong>Every query starts fresh.</strong> Query 1 and query 1,000,000 are equally expensive. System never compounds.</div>
+      <div class="cmp-item bad"><strong>Generic HTML cleaning.</strong> BeautifulSoup, trafilatura — 50-200ms, still retains nav bars, cookie banners, sidebar cruft. Doesn't know what it's looking at.</div>
+      <div class="cmp-item bad"><strong>Index grows forever.</strong> More content = larger index = slower retrieval. Cost scales with knowledge.</div>
+      <div class="cmp-item bad"><strong>Hits the same Cloudflare wall 100,000 times.</strong> No memory. No routing intelligence. No phase learning. Same failure mode forever.</div>
+      <div class="cmp-item bad"><strong>Chunking for embeddings.</strong> Retrieval quality limited by chunk quality. No retrieval step can fix bad cleaning.</div>
+    </div>
+    <div class="cmp-col">
+      <span class="cmp-label" style="color:var(--green)">TAG — What AXIOM does</span>
+      <div class="cmp-item good"><strong>Routes by structural address.</strong> Meaning = location in topology space. Correct by architecture, not by chance.</div>
+      <div class="cmp-item good"><strong>Every query teaches the system.</strong> Phase I → II → III earned through use. Query 1,000,000 is faster and cheaper than query 1.</div>
+      <div class="cmp-item good"><strong>Topology-class-aware extraction.</strong> Shell-native grep/sed/awk pipeline. 7.4ms. 99.27% compression. Knows exactly what it's looking at before it looks.</div>
+      <div class="cmp-item good"><strong>Index is fixed-size weights.</strong> The MFT is (1, 256) hidden state. Gets smarter, never bigger. Cost trends toward zero for known topology.</div>
+      <div class="cmp-item good"><strong>Learns friction patterns.</strong> Phase III: Cloudflare-protected domain → Tor routed automatically, compiled, never hits the wall again.</div>
+      <div class="cmp-item good"><strong>Aggressive compression to context window.</strong> 1.6MB → 1.5KB. Cleaning quality IS retrieval quality. No retrieval step needed.</div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <span class="metric-label">Stripe API Docs</span>
+      <span class="metric-val">99.27%</span>
+      <div class="metric-sub">1,155,697 bytes → 8,460 bytes in <strong style="color:var(--amber)">7.4ms</strong>. Shell-native pipeline on warm Alpine container.</div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Twilio Docs</span>
+      <span class="metric-val">99.90%</span>
+      <div class="metric-sub">1,621,723 bytes → 1,571 bytes in <strong style="color:var(--amber)">9ms</strong>. Topology-class-aware extraction, not generic HTML stripping.</div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">WLM Query Latency</span>
+      <span class="metric-val">&lt;2ms</span>
+      <div class="metric-sub">Phase III L1 cache hit. Weighted average <strong style="color:var(--amber)">1.14ms</strong> on warm system. One matrix multiply.</div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Wikipedia Preparse</span>
+      <span class="metric-val">&lt;30min</span>
+      <div class="metric-sub">6.7M articles on RTX 5080. Nightly incremental ~50K changed articles in <strong style="color:var(--amber)">&lt;60s</strong>.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ PHILOSOPHY -->
+<section class="section" id="philosophy">
+  <span class="sec-eyebrow">02 — Philosophical Foundation</span>
+  <div class="sec-title">Two People, <span>One Web</span></div>
+
+  <div class="phil">
+    <div class="phil-title">The Foundational Analogy</div>
+    <p>When you meet a person — do you wonder anxiously what kind of person they are, what you should know about them, what to say, what they might ask, what would be nice to take so it's easier to learn from them next time you meet? <strong>Or do you hard-judge on first contact, extract what you can, and run the same extraction script the next 100,000 times</strong> — falling into every honeypot, getting rejected by every locked door you already knew was locked, never learning that the same hole keeps catching you?</p>
+    <p>The second person is every scraper ever built. They hit the same Cloudflare wall 100,000 times and learn nothing. They get rate limited on stripe.com at 9:00am and try again at 9:00:01am. They ignore robots.txt because they weren't told not to. They fall into the same honeypot link on every crawl because it looked like content.</p>
+    <p><strong>AXIOM is the first person.</strong> Before approaching, it has already thought: what kind of site is this? what does it want from me? what's the right way to ask? what's worth taking and what's noise they want me to carry so I slow down? The WLM's friction forecast is that social read happening in under 2ms. And the structural layer is memory — AXIOM has met stripe.com before, knows how it thinks, knows where the real content lives versus the marketing wrapper.</p>
+    <p>The deep part: <em>"what would be nice to take so it's easier to learn the next time"</em> — that's the hidden state updating through training. Every crawl that surprises the model fires a SurpriseEvent, dissolves the cached assumption, and rebuilds it smarter. Traditional RAG doesn't get better at reading stripe.com on visit 100,000 than visit 1. <strong>AXIOM does.</strong></p>
+  </div>
+
+  <div class="phil" style="border-left-color:var(--purple)">
+    <div class="phil-title" style="color:var(--purple)">The Linux Kernel Analogy</div>
+    <p>TAG is literally a kernel for web intelligence. The Linux kernel manages hardware, abstracts complexity, provides a syscall interface, schedules processes — applications think in files, not disk sectors. <strong>AXIOM manages web structure, abstracts topology, provides a topology class interface, routes queries</strong> — callers think in intent vectors, not HTML bytes.</p>
+    <p>An application on Linux makes a syscall. The kernel handles everything below that. It does not ask the application to understand interrupt handlers, memory-mapped IO, or filesystem journaling. The application asks for a file; it gets content.</p>
+    <p>The AXIOM graph sends a <code>DaemonRequest</code> with an intent vector. TAG handles everything below that — classification, traversal policy, friction forecasting, fetch mode selection, recipe compilation, extraction. The graph asks for signal; it gets clean structured content. The kernel does not exist at the graph level.</p>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ PHASES -->
+<section class="section" id="phases">
+  <span class="sec-eyebrow">03 — Three-Phase Cognition</span>
+  <div class="sec-title">Phases Earned, <span>Not Assigned</span></div>
+
+  <div class="phil">
+    <p>Every topology class starts at Phase I. <strong>Phases are earned through accumulated confidence, not configured by operators.</strong> The system self-promotes based on what it has learned. A topology class at Phase III means AXIOM has accumulated enough structural knowledge about that class that it can route without live simulation — compiled policy, direct execution, zero exploration cost.</p>
+    <p>The critical invariant: <strong>Phase III can regress.</strong> A SurpriseEvent that fires dissolve on a Phase III class sends it back to Phase II — the world changed, the compiled policy is stale, revalidation required. Phases track the current truth about what the system knows, not what it once knew.</p>
+  </div>
+
+  <div class="phase-row">
+    <div class="phase" data-n="I">
+      <span class="phase-num" style="color:var(--orange)">Phase I</span>
+      <div class="phase-name">Learns</div>
+      <div class="phase-sub">Live traversal only — world model building</div>
+      <div class="phase-body">
+        System has no compiled knowledge for this topology class. Every fetch is live exploration. WLM readout returns wide traversal policies — high depth, exploratory, generous timeout. Friction encounters are logged as training signal.<br><br>
+        <code>hidden_state</code> is updating actively. Every domain topology event for this class passes through the Mamba SSM forward pass. The MFT is learning what this topology class looks like across domains.<br><br>
+        Confidence threshold to advance: <code>THETA_CONFIDENCE_II = 0.70</code>
+      </div>
+      <span class="phase-pill" style="border-color:var(--orange);color:var(--orange)">PHASE_I = PhaseInt(1)</span>
+    </div>
+    <div class="phase" data-n="II">
+      <span class="phase-num" style="color:var(--amber)">Phase II</span>
+      <div class="phase-name">Predicts</div>
+      <div class="phase-sub">World model active — predicts before crawling</div>
+      <div class="phase-body">
+        WLM has sufficient structural knowledge to predict friction, render requirements, and source priority before the fetch happens. Traversal policies are tighter — the system knows what to expect. <code>asyncio.gather()</code> runs WLM + WLP in parallel, response assembled before fetch begins.<br><br>
+        Phase II is the compounding inflection point. The system is no longer exploring — it is executing against predictions. Prediction accuracy feeds back into the SSM via SurpriseEvents. Confident predictions reinforce; wrong predictions dissolve.<br><br>
+        Confidence threshold to advance: <code>THETA_CONFIDENCE_III = 0.90</code>
+      </div>
+      <span class="phase-pill" style="border-color:var(--amber);color:var(--amber)">PHASE_II = PhaseInt(2)</span>
+    </div>
+    <div class="phase" data-n="III">
+      <span class="phase-num" style="color:var(--green)">Phase III</span>
+      <div class="phase-name">Knows</div>
+      <div class="phase-sub">Compiled policy — direct routing, zero simulation</div>
+      <div class="phase-body">
+        The topology class has compiled structural policy. Route selection is pure recall — one matrix multiply against the MFT hidden state. No exploration, no simulation, no uncertainty. WLM query latency &lt;2ms at L1 cache hit.<br><br>
+        Phase III topology classes are the asymptote RAG never reaches: the cost of operating on this class trends toward zero while accuracy continues improving. A Cloudflare-protected domain at Phase III is pre-routed through Tor before the request fires.<br><br>
+        Regress trigger: <code>surprise_score &gt; THETA_SURPRISE_DEFAULT (0.35)</code> → Phase III → Phase II
+      </div>
+      <span class="phase-pill" style="border-color:var(--green);color:var(--green)">PHASE_III = PhaseInt(3)</span>
+    </div>
+  </div>
+
+  <div class="codeblock" data-label="VALID PHASE TRANSITIONS">
+    <pre><span class="c-dim"># Valid transitions — enforced by PhaseTransitionEvent.__post_init__</span>
+<span class="c-dim"># Invalid transitions raise ValueError at construction time</span>
+
+<span class="c-amber">VALID_TRANSITIONS</span> = frozenset({
+    (<span class="c-green">1</span>, <span class="c-green">2</span>),   <span class="c-dim"># learns → predicts   confidence &gt;= THETA_CONFIDENCE_II (0.70)</span>
+    (<span class="c-green">2</span>, <span class="c-green">3</span>),   <span class="c-dim"># predicts → knows    confidence &gt;= THETA_CONFIDENCE_III (0.90)</span>
+    (<span class="c-green">3</span>, <span class="c-green">2</span>),   <span class="c-dim"># knows → predicts    surprise dissolve triggered</span>
+    (<span class="c-green">2</span>, <span class="c-green">1</span>),   <span class="c-dim"># predicts → learns   reindex forced, world model invalidated</span>
+})
+
+<span class="c-dim"># 1 → 3 is NEVER valid. Confidence must be earned incrementally.</span>
+<span class="c-dim"># Phase skipping is architecturally prohibited.</span></pre>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ ARCHITECTURE -->
+<section class="section" id="architecture">
+  <span class="sec-eyebrow">04 — System Architecture</span>
+  <div class="sec-title">Six Layers, <span>One Loop</span></div>
+
+  <div class="phil">
+    <p>AXIOM is built as a layered event-driven system where each layer is independent. <strong>The crawler is a bus, not a component</strong> — it acquires and emits, nothing else. Layers latch on independently via typed event subscriptions. No layer knows about layers above or below it. The only shared state is the store: four files that own everything the system knows.</p>
+  </div>
+
+  <table class="ltable">
+    <thead>
+      <tr>
+        <th>Layer</th>
+        <th>Component</th>
+        <th>Role</th>
+        <th>Emits</th>
+        <th>Never Does</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>0 — Bus</td>
+        <td><code>crawler_bus.py</code></td>
+        <td>Typed event bus. Dual-sink: Kafka (mTLS, SASL) + asyncio.Queue degraded mode. HMAC-SHA256 on every envelope. Circuit breaker. Dead letter queue with fsync. <strong>Zero logic.</strong></td>
+        <td>All 8 typed topics</td>
+        <td class="dim">Interprets events. Makes routing decisions. Contains business logic.</td>
+      </tr>
+      <tr>
+        <td>1 — Crawler</td>
+        <td><code>crawler/fetcher.py</code><br><code>frontier.py</code><br><code>bloom_filter.py</code></td>
+        <td>The vacuum. Receives CrawlManifest from preparser. Fetches. Emits RawFetchEvent. Nothing else. Three modes: STATIC (httpx clearnet), HEADLESS (Playwright + Chromium), TOR (Tor + Chromium + gVisor container). Bloom filter: 400M URLs in 500MB.</td>
+        <td><code>RawFetchEvent</code></td>
+        <td class="dim">Classifies pages. Makes topology decisions. Interprets content.</td>
+      </tr>
+      <tr>
+        <td>2 — Alpine Strip</td>
+        <td><code>alpine_strip/offline_pipeline.py</code><br><code>batch_executor.py</code></td>
+        <td>Same signal_kernel, offline context. Subscribes to RawFetchEvent. Emits CleanSignalEvent. GPU-parallel batch invocation. 80K URLs/sec on RTX 5080. Same warm Alpine container as critical path — the kernel never knows it's offline.</td>
+        <td><code>CleanSignalEvent</code></td>
+        <td class="dim">Changes kernel behavior based on context. Exposes different recipes offline vs online.</td>
+      </tr>
+      <tr>
+        <td>3 — Preparser</td>
+        <td><code>preparser/domain_analyzer.py</code><br><code>robots_parser.py</code><br><code>sitemap_parser.py</code><br><code>crawl_planner.py</code></td>
+        <td>Structural intelligence — the human. robots.txt = structural signal, not compliance. Sitemap = free topology map. Synthesizes all signals → DomainMap → CrawlManifest. Phantom executes the manifest blindly; no routing decisions of its own.</td>
+        <td><code>DomainTopologyEvent</code><br><code>CrawlManifestReadyEvent</code></td>
+        <td class="dim">Fetches content pages. Makes compliance decisions. Interprets page content.</td>
+      </tr>
+      <tr>
+        <td>4A — WLM</td>
+        <td><code>world_model/latent_model.py</code><br><code>mamba_router.py</code><br><code>wlm_tokenizer.py</code><br><code>wlm_decoders.py</code></td>
+        <td><strong>Satellite view.</strong> Mamba SSM. Subscribes to DomainTopologyEvent + SurpriseEvent. The hidden_state IS the MFT. Outputs TraversalPolicy + FrictionForecast + SourcePriority. Three-tier cache L1/L2/L3. &lt;2ms Phase III. Called with WLP via asyncio.gather() — never sequential.</td>
+        <td><code>WLMResponse</code></td>
+        <td class="dim">Fetches anything. Modifies hidden_state during inference. Call forward() from query path.</td>
+      </tr>
+      <tr>
+        <td>4B — WLP</td>
+        <td><code>world_model/latent_parser.py</code></td>
+        <td><strong>Street level — the cartographer.</strong> Tree-sitter + GNN. Subscribes to CleanSignalEvent. Tree-sitter parses HTML/JSON/JS/CSS → CST → PyTorch Geometric graph → GraphSAGE node classification (SIGNAL/NOISE/BOUNDARY) → ZoneMap. Emits ZoneMapUpdatedEvent → recipe recompilation. ANTLR4 fallback for custom DSL topologies.</td>
+        <td><code>ZoneMapUpdatedEvent</code></td>
+        <td class="dim">Import from latent_model.py. Coordinate with WLM directly. Make traversal decisions.</td>
+      </tr>
+      <tr>
+        <td>5 — Topology</td>
+        <td><code>topology/classifier.py</code><br><code>parser.py</code><br><code>sanitizer.py</code><br><code>surprise_detector.py</code></td>
+        <td>Classification + compilation + surprise. Classifier: URL + headers + 4KB window → topology class string. Never fetches. Parser: ZoneMap → compiled grep recipe. Sanitizer: last-mile strip, no LLM. Surprise detector: emits SurpriseEvent on divergence from prediction, not on failure.</td>
+        <td><code>SurpriseEvent</code><br><code>PhaseTransitionEvent</code></td>
+        <td class="dim">Classifier fetches. Parser executes. Sanitizer uses LLM.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ MFT -->
+<section class="section" id="mft">
+  <span class="sec-eyebrow">05 — The MFT</span>
+  <div class="sec-title">Weights as Index — <span>The Core Insight</span></div>
+
+  <div class="mft-box">
+    <div class="mft-title">topology_router.pt is not a model that uses an index. It IS the index.</div>
+    <span class="mft-eq">Forward pass IS the lookup. Writing to index IS the gradient step. Same file viewed from two directions.</span>
+
+    <div class="mft-grid">
+      <div class="mft-cell">
+        <span class="mft-cell-label">At Query Time</span>
+        <div class="mft-cell-val">
+          Query arrives → <strong>intent_vector</strong> → one matrix multiply against <strong>hidden_state (1, 256)</strong> → output is TraversalPolicy + SourceHints<br><br>
+          <strong>O(1) lookup. Not search — memory read.</strong> No database. No cosine similarity. No approximate nearest neighbors.
+        </div>
+      </div>
+      <div class="mft-cell">
+        <span class="mft-cell-label">At Training Time</span>
+        <div class="mft-cell-val">
+          Domain topology event → tokenize → Mamba SSM forward pass → gradient step via index_daemon → <strong>hidden_state updated</strong> after 500ms consistency window<br><br>
+          <strong>Writing to index = gradient step.</strong> Every crawl makes the routing smarter.
+        </div>
+      </div>
+      <div class="mft-cell">
+        <span class="mft-cell-label">As a File</span>
+        <div class="mft-cell-val">
+          Binary PyTorch state dict. ~50-80MB. <strong>Fixed size forever.</strong> After 6.7M Wikipedia articles, after 50K crawl cycles, the hidden state is still (1, 256). 256 floats encoding everything the system knows about where answers live on the web.
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:28px">
+      <div class="codeblock" data-label="THE MFT — HIDDEN STATE">
+        <pre><span class="c-dim"># In MambaRouter.__init__:</span>
+<span class="c-amber">self</span>.register_buffer(
+    <span class="c-green">"hidden_state"</span>,
+    torch.zeros(<span class="c-gold">1</span>, <span class="c-gold">256</span>)  <span class="c-dim"># THIS IS THE MFT</span>
+)
+<span class="c-dim"># register_buffer: saved in state_dict, not a gradient parameter</span>
+<span class="c-dim"># updated ONLY by index_daemon.py after gradient steps</span>
+<span class="c-dim"># NEVER updated during inference — this invariant is absolute</span>
+
+<span class="c-dim"># The MFT lookup — O(1), one matrix multiply:</span>
+<span class="c-amber">def</span> readout(self, intent_vector=None) -> ReadoutResult:
+    with torch.no_grad():  <span class="c-dim"># enforced: hidden_state cannot change here</span>
+        h = self.hidden_state  <span class="c-dim"># (1, 256) — the entire MFT</span>
+        <span class="c-amber">if</span> intent_vector <span class="c-amber">is not</span> None:
+            h = h + self.intent_projection(intent_vector)
+        topology_logits  = self.topology_head(h)   <span class="c-dim"># (1, 18)</span>
+        traversal_raw    = self.traversal_head(h)  <span class="c-dim"># (1, 7)</span>
+        friction_raw     = self.friction_head(h)   <span class="c-dim"># (1, 5)</span>
+        source_embedding = self.source_head(h)     <span class="c-dim"># (1, 512)</span>
+    <span class="c-amber">return</span> ReadoutResult(topology_logits, traversal_raw, friction_raw, source_embedding)</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="col-box">
+      <div class="col-box-title" style="color:var(--green)">What topology_router.pt IS</div>
+      <ul>
+        <li>The complete WLM weights including persistent <code>hidden_state</code> buffer</li>
+        <li>The MFT — (1, 256) tensor encoding accumulated structural knowledge of the web</li>
+        <li>A routing oracle: forward pass = routing lookup</li>
+        <li>A learning artifact: gradient step = index update</li>
+        <li>Fixed-size forever regardless of crawl history length</li>
+        <li>Written ONLY by <code>index_daemon.py</code> via staging + atomic rename</li>
+        <li>Read with <code>weights_only=True</code> — no exceptions, anywhere</li>
+      </ul>
+    </div>
+    <div class="col-box">
+      <div class="col-box-title" style="color:var(--red)">What topology_router.pt is NOT</div>
+      <ul>
+        <li>Not a vector database — no cosine similarity, no approximate search</li>
+        <li>Not a cache — no expiry, no eviction, no TTL</li>
+        <li>Not a knowledge base storing facts about the web</li>
+        <li>Not a configuration file — no topology class definitions or URL patterns</li>
+        <li>Not append-only — overwritten entirely on each checkpoint via atomic rename</li>
+        <li>Not human-readable — binary format, belongs in .gitignore</li>
+        <li>Not shared directly across fleet — each instance has its own MFT</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ WLM -->
+<section class="section" id="wlm">
+  <span class="sec-eyebrow">06 — World Latent Model</span>
+  <div class="sec-title">Satellite View — <span>Mamba SSM</span></div>
+
+  <div class="phil">
+    <div class="phil-title">What the WLM Is</div>
+    <p>The WLM is a Mamba State Space Model maintaining a compressed latent representation of the structural topology of the web. It is the satellite view — it sees domains, topology classes, friction patterns, structural relationships from above. It answers one question before every fetch: <strong>Given what I know about how the web is structured, how should AXIOM approach this specific topology class at this specific moment in time?</strong></p>
+    <p>The WLM has three simultaneously active identities: during inference it is a routing oracle (one matrix multiply, O(1), faster than any database lookup); during training it is a sequence model (Mamba SSM processing domain topology events, updating its world model); as a file it is <code>topology_router.pt</code> — a checkpoint of accumulated structural knowledge that survives restarts and picks up exactly where it left off.</p>
+  </div>
+
+  <div class="phil" style="border-left-color:var(--teal)">
+    <div class="phil-title" style="color:var(--teal)">Why Mamba SSM and Not Transformer or GNN</div>
+    <p><strong>Transformer:</strong> Self-attention is O(n²) in sequence length. Sequence length = millions of domain events = not viable. No persistent state — each forward pass sees only its context window. Cannot accumulate structural knowledge across millions of crawl cycles.</p>
+    <p><strong>GNN:</strong> Treats topology classes as static graph nodes — topology classes evolve. Requires full graph at inference time — WLM needs incremental updates. No temporal ordering — the sequence of domain events matters.</p>
+    <p><strong>Mamba SSM:</strong> O(n) training, <strong>O(1) inference</strong>. Fixed-size hidden state regardless of history length — (1, 256) whether 1 or 10 billion events have been seen. Selective state transitions — Mamba learns which domain events matter. Perfect semantic alignment with MFT concept: the MFT IS a compressed structural map, the SSM hidden state IS a compressed structural map — the same thing by definition.</p>
+  </div>
+
+  <table class="ltable">
+    <thead>
+      <tr><th>Component</th><th>File</th><th>Built By</th><th>Responsibility</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>MambaRouter</td>
+        <td><code>mamba_router.py</code></td>
+        <td>Opus</td>
+        <td>nn.Module only. mamba_ssm.Mamba blocks + output heads (topology 18, traversal 7, friction 5, source 512, phase 3). hidden_state register_buffer = the MFT. readout() for inference, forward() for training. WLMTrainingInterface inner class. No inference logic, no tokenizer, no decoders.</td>
+      </tr>
+      <tr>
+        <td>WLMTokenizer</td>
+        <td><code>wlm_tokenizer.py</code></td>
+        <td>Sonnet</td>
+        <td>8,192 token vocabulary. Topology class tokens (0-17), structural primitive tokens (18-1023), domain hash tokens (1024-4095), intent signal tokens (4096-8191). Deterministic domain normalization. Intent vector quantization. Sequence assembly with thoughtful padding.</td>
+      </tr>
+      <tr>
+        <td>WLM Decoders</td>
+        <td><code>wlm_decoders.py</code></td>
+        <td>Sonnet</td>
+        <td>decode_traversal() (sigmoid/softplus activations → TopologyTraversalPolicy), decode_friction() (sigmoid + coherence enforcement → FrictionForecast), decode_source_priority() (dot product against source_matrix → ranked domains). TOPOLOGY_TRAVERSAL_BIAS constants. FRICTION_FLOORS. EmptyStructuralLayer fallback.</td>
+      </tr>
+      <tr>
+        <td>WorldLatentModel</td>
+        <td><code>latent_model.py</code></td>
+        <td>Opus</td>
+        <td>Orchestration layer. Single public method: query(). Three-tier cache (L1 domain-policy, L2 topology-policy, L3 model readout). 500ms exact consistency window for hidden_state updates. Bus subscription. WATCHDOG registration. cold_start_warmup() with topological sort. WLMTrainingInterface accessor.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="codeblock" data-label="THREE-TIER CACHE MATH">
+    <pre><span class="c-dim"># Cache routing — mathematically justified latency guarantee</span>
+
+<span class="c-amber">L1</span>: key=(domain, topology_class)  TTL=CACHE_TTL_BY_CLASS[class]
+<span class="c-amber">L2</span>: key=topology_class            TTL=2×domain_TTL
+<span class="c-amber">L3</span>: model readout                  no key, no TTL, always fresh
+
+<span class="c-dim"># Expected distribution on warm system:</span>
+L1 hits:  <span class="c-green">~65%</span>  latency ~0.5ms   <span class="c-dim"># dict lookup + TTL check</span>
+L2 hits:  <span class="c-gold">~20%</span>  latency ~0.8ms   <span class="c-dim"># topology class policy hit</span>
+L3 calls: <span class="c-orange">~15%</span>  latency ~4ms    <span class="c-dim"># one matrix multiply, still fast</span>
+
+<span class="c-dim"># Weighted average:</span>
+<span class="c-amber">0.65 × 0.5ms + 0.20 × 0.8ms + 0.15 × 4ms = 1.14ms average</span>
+
+<span class="c-dim"># TTL=0 classes BYPASS ALL CACHE TIERS — correctness requirement:</span>
+TTL_ZERO = {<span class="c-red">"AUTH_REDIRECT"</span>, <span class="c-red">"CLOUDFLARE_CHALLENGE"</span>, <span class="c-red">"RATE_LIMITED"</span>}
+<span class="c-dim"># Caching a CLOUDFLARE_CHALLENGE as real content = silent failure</span>
+<span class="c-dim"># worse than cache miss. Never cache friction topology classes.</span></pre>
+  </div>
+
+  <div class="codeblock" data-label="500ms CONSISTENCY WINDOW — EXACT NOT DEFENSIVE">
+    <pre><span class="c-dim"># The problem: hidden_state update during in-flight readout = inconsistent forward pass</span>
+<span class="c-dim"># The solution: exact counter with 500ms ceiling (not asyncio.sleep(0.5))</span>
+
+<span class="c-amber">async def</span> update_hidden_state(self, new_hidden: torch.Tensor) -> None:
+    deadline = time.monotonic() + <span class="c-gold">0.500</span>  <span class="c-dim"># 500ms ceiling</span>
+    <span class="c-amber">while</span> self._model._active_readout_count > <span class="c-gold">0</span>:
+        <span class="c-amber">if</span> time.monotonic() > deadline:
+            log.warning(<span class="c-green">"hidden_state_update_deadline_exceeded"</span>)
+            <span class="c-amber">break</span>
+        <span class="c-amber">await</span> asyncio.sleep(<span class="c-gold">0.001</span>)  <span class="c-dim"># 1ms poll</span>
+
+    <span class="c-dim"># Atomic reference swap — Python GIL makes this safe</span>
+    self._model._router.hidden_state.copy_(new_hidden)
+    self._model._hidden_state_version += <span class="c-gold">1</span>
+
+<span class="c-dim"># If readouts complete in 3ms: update happens in 3ms. Not 500ms.</span>
+<span class="c-dim"># 500ms is only reached if something is wrong with an in-flight query.</span>
+<span class="c-dim"># asyncio.sleep(0.5) would waste 497ms every time. This wastes 0.</span></pre>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ WLP -->
+<section class="section" id="wlp">
+  <span class="sec-eyebrow">07 — World Latent Parser</span>
+  <div class="sec-title">Street Level — <span>The Cartographer</span></div>
+
+  <div class="phil">
+    <div class="phil-title">WLP is Not a Classifier — It is a Cartographer</div>
+    <p>Every other system asks <em>"what is this page about?"</em> WLP asks <em>"what is the shape of this page?"</em> — and then draws the map. Signal zones, noise zones, boundaries, structural topology. Not semantics. Cartography.</p>
+    <p>The analogy: Google Maps didn't become accurate because someone drew every street. It became accurate because millions of drivers drove those streets and the aggregate signal corrected the map. <strong>WLP does the same for web structure.</strong> Every crawl cycle is a driver. Every CleanSignalEvent is a GPS ping. The ZoneMap is the map that emerges from aggregate structural signal.</p>
+    <p>The MFT in hidden weights part is what makes it genuinely novel. Standard cartography stores the map in a database. WLP stores it in weights. <strong>The map IS the model. Reading the map IS the forward pass. Updating the map IS the gradient step.</strong> Same artifact, viewed from two directions.</p>
+  </div>
+
+  <div class="codeblock" data-label="WLP PIPELINE">
+    <pre><span class="c-dim"># Input: CleanSignalEvent (HTML/JSON after signal_kernel extraction)</span>
+<span class="c-dim"># Output: ZoneMap (per topology class structural extraction strategy)</span>
+
+CleanSignalEvent
+    ↓
+<span class="c-amber">Tree-sitter parser</span>  <span class="c-dim"># HTML/JSON/JS/CSS grammars → CST (Concrete Syntax Tree)</span>
+    ↓                  <span class="c-dim"># Deterministic. No ML. Pure structural parsing.</span>
+<span class="c-amber">CST → Graph</span>         <span class="c-dim"># Nodes: DOM elements. Edges: parent/child/sibling</span>
+    ↓                  <span class="c-dim"># PyTorch Geometric graph construction</span>
+<span class="c-amber">GraphSAGE</span>           <span class="c-dim"># Node classification: SIGNAL / NOISE / BOUNDARY</span>
+    ↓                  <span class="c-dim"># Trained on 6.7M Wikipedia parse trees</span>
+<span class="c-amber">ZoneMap</span>             <span class="c-dim"># signal_zones, noise_zones, strategy, confidence, version</span>
+    ↓
+<span class="c-amber">ZoneMapUpdatedEvent</span> <span class="c-dim"># → topology/parser.py → recipe recompilation</span>
+
+<span class="c-dim"># ANTLR4 fallback for custom DSL topologies (proprietary doc formats)</span>
+<span class="c-dim"># discover_signal_zones() for unknown topology → auto-creates new subclasses</span></pre>
+  </div>
+
+  <div class="two-col">
+    <div class="col-box">
+      <div class="col-box-title" style="color:var(--teal)">WLM vs WLP — The Distinction</div>
+      <ul>
+        <li><strong>WLM:</strong> satellite. Sees the whole web from above. Temporal sequence model. Answers "how to approach"</li>
+        <li><strong>WLP:</strong> street level. Sees one page from inside. Structural graph model. Answers "where exactly is the signal"</li>
+        <li><strong>WLM input:</strong> sequence of domain topology events over time</li>
+        <li><strong>WLP input:</strong> single page's HTML/JSON parse tree as graph</li>
+        <li><strong>WLM output:</strong> TraversalPolicy + FrictionForecast + SourcePriority</li>
+        <li><strong>WLP output:</strong> ZoneMap — CSS selectors, XPath patterns, extraction strategy</li>
+        <li><strong>WLM:</strong> Mamba SSM — sequence model with persistent state</li>
+        <li><strong>WLP:</strong> Tree-sitter + GraphSAGE — structural parser + graph classifier</li>
+      </ul>
+    </div>
+    <div class="col-box">
+      <div class="col-box-title" style="color:var(--purple)">How They Coordinate</div>
+      <ul>
+        <li>Called simultaneously via <code>asyncio.gather()</code> — never sequential, never one waiting on the other</li>
+        <li>Neither imports from the other — peers, not dependencies</li>
+        <li>Both subscribe to bus events independently</li>
+        <li>Both register with WATCHDOG for their respective weight files</li>
+        <li>WLM watches <code>topology_router.pt</code> + <code>structural_layer.pt</code></li>
+        <li>WLP watches <code>structural_layer.pt</code> (shared zone knowledge)</li>
+        <li>Results assembled into WLMResponse at caller level</li>
+        <li>Surprise events affect both — dissolve triggers cache invalidation in WLM, zone map recompilation in WLP</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ SIGNAL KERNEL -->
+<section class="section" id="kernel">
+  <span class="sec-eyebrow">08 — Signal Kernel</span>
+  <div class="sec-title">Alpine Strip — <span>The Extraction Engine</span></div>
+
+  <div class="phil">
+    <div class="phil-title">What the Signal Kernel Is</div>
+    <p>The signal kernel is a two-process Alpine Linux container running a grep/sed/awk pipeline against topology-class-specific recipes. It is the only component that touches raw page bytes. It knows nothing about the web, nothing about topology classes, nothing about the WLM. It receives raw content and a recipe. It runs the recipe. It returns clean signal. That is all.</p>
+    <p>The Alpine container has <strong>network_mode: none</strong>. It cannot make network calls. It cannot phone home. It is isolated by design. The warm container bug is fixed: the container stays alive between invocations (Process 1), with the grep pipeline and crond checkpoint daemon running as Process 2. Startup latency: ~120ms cold, ~0ms warm.</p>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <span class="metric-label">Stripe API Docs</span>
+      <span class="metric-val">99.27%</span>
+      <div class="metric-sub">1.1MB → 8.4KB in <strong style="color:var(--amber)">7.4ms</strong></div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Twilio API Docs</span>
+      <span class="metric-val">99.90%</span>
+      <div class="metric-sub">1.6MB → 1.5KB in <strong style="color:var(--amber)">9ms</strong></div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Signal Kernel LOC</span>
+      <span class="metric-val">15K</span>
+      <div class="metric-sub"><strong style="color:var(--amber)">350 tests</strong> passing. 25K with tests.</div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Checkpoint Interval</span>
+      <span class="metric-val">15min</span>
+      <div class="metric-sub">SHA-256 verified. <strong style="color:var(--amber)">48 archives</strong> rotating. 12h history.</div>
+    </div>
+  </div>
+
+  <div class="codeblock" data-label="RECIPE SECURITY MODEL">
+    <pre><span class="c-dim"># Hardcoded recipes — 5 classes, human-audited, hash-verified at every load</span>
+HARDCODED: {NEWS_ARTICLE, SAAS_DOCS, REST_API_JSON, JSON_LD_STRUCTURED, ECOMMERCE_PRODUCT}
+
+<span class="c-dim"># Recipe security membrane — 18 injection patterns, caught at validator.py</span>
+INJECTION_PATTERNS = (
+    <span class="c-red">r"\$\("</span>,        <span class="c-dim"># command substitution</span>
+    <span class="c-red">r"`[^`]+`"</span>,     <span class="c-dim"># backtick execution</span>
+    <span class="c-red">r";\s*rm\s"</span>,    <span class="c-dim"># rm after semicolon</span>
+    <span class="c-red">r"\|\s*bash"</span>,   <span class="c-dim"># pipe to bash</span>
+    <span class="c-red">r"\beval\s"</span>,    <span class="c-dim"># eval</span>
+    <span class="c-red">r"/dev/tcp"</span>,    <span class="c-dim"># network via pseudo-device</span>
+    <span class="c-red">r"base64\s*-d"</span>, <span class="c-dim"># base64 decode — common obfuscation</span>
+    <span class="c-dim"># ... 11 more patterns</span>
+)
+
+<span class="c-dim"># Positive allowlist — only these commands permitted in recipes</span>
+ALLOWED_RECIPE_COMMANDS = {<span class="c-green">"grep"</span>, <span class="c-green">"sed"</span>, <span class="c-green">"awk"</span>, <span class="c-green">"cat"</span>, <span class="c-green">"cut"</span>, <span class="c-green">"tr"</span>, <span class="c-green">"head"</span>, <span class="c-green">"tail"</span>, <span class="c-green">"sort"</span>, <span class="c-green">"uniq"</span>}
+MAX_RECIPE_LINE_COUNT = <span class="c-gold">50</span>
+
+<span class="c-dim"># Detection → InjectionAuditRecord (full recipe content logged) → RecipeInjectionAttempt raised</span>
+<span class="c-dim"># Never passed to kernel. Requires forensic review. Hard stop.</span></pre>
+  </div>
+
+  <table class="ltable">
+    <thead>
+      <tr><th>Contract</th><th>Validated At</th><th>Hard Stop</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>KernelInput</td>
+        <td>Construction (__post_init__)</td>
+        <td>No</td>
+        <td>Raw content &lt;4MB, valid topology class, SHA-256 intent hash, valid URL, canonical UUID4 run_id</td>
+      </tr>
+      <tr>
+        <td>KernelOutput</td>
+        <td>Construction (__post_init__)</td>
+        <td>No</td>
+        <td>clean_byte_count ≤ raw_byte_count, extraction_empty consistent with clean_signal presence</td>
+      </tr>
+      <tr>
+        <td>RecipeMount</td>
+        <td>After validator.py passes</td>
+        <td><span style="color:var(--green)">YES — if it exists, it's safe</span></td>
+        <td>Existence of this object IS the proof. No downstream re-validation.</td>
+      </tr>
+      <tr>
+        <td>RecipeInjectionAttempt</td>
+        <td>validator.py on injection pattern match</td>
+        <td><span style="color:var(--red)">YES — hard stop</span></td>
+        <td>Full recipe content logged. Never passed to kernel. Forensic review required.</td>
+      </tr>
+      <tr>
+        <td>RecipeHashMismatch</td>
+        <td>validator.py on hardcoded recipe load</td>
+        <td><span style="color:var(--red)">YES — tamper event</span></td>
+        <td>Expected vs actual SHA-256 logged. Hardcoded recipes are immutable at runtime.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ TOPOLOGY -->
+<section class="section" id="topology">
+  <span class="sec-eyebrow">09 — Topology Classes</span>
+  <div class="sec-title">18 Classes, <span>One Fallback Chain</span></div>
+
+  <div class="phil">
+    <p>Every page on the web belongs to exactly one topology class. The classifier assigns it. The WLM holds a compiled policy for it. The recipe extracts from it. <strong>One class = one recipe. No pipeline mixing.</strong> The fallback chain (PARENT_CLASS_MAP) ensures that when no recipe exists for a subclass, it walks the chain to the nearest parent with a known policy — recursive walk, never single-step, cycle-guarded.</p>
+  </div>
+
+  <div class="topo-grid">
+    <div class="topo-cell">
+      <div class="topo-class">NEWS_ARTICLE</div>
+      <div class="topo-parent">Root class</div>
+      <div class="topo-desc">Hardcoded recipe. Fallback parent for BLOG_POST, WIKIPEDIA_ARTICLE. Depth 2, static render.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">NEWS_ARTICLE_PAYWALLED</div>
+      <div class="topo-parent">→ NEWS_ARTICLE</div>
+      <div class="topo-desc">Paywall wrapper detected. Tor routing preferred. Paywall probability floor 0.95.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">SAAS_DOCS</div>
+      <div class="topo-parent">Root class</div>
+      <div class="topo-desc">Hardcoded recipe. Parent for VERSIONED, WITH_CODE variants. Depth 4.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">SAAS_DOCS_VERSIONED</div>
+      <div class="topo-parent">→ SAAS_DOCS</div>
+      <div class="topo-desc">Version-aware doc pages. URL contains version segment. Depth 4.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">SAAS_DOCS_WITH_CODE</div>
+      <div class="topo-parent">→ SAAS_DOCS</div>
+      <div class="topo-desc">Always headless — JS required for code block rendering. SE separator applied.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">REST_API_JSON</div>
+      <div class="topo-parent">Root class</div>
+      <div class="topo-desc">Hardcoded recipe. Always static. JSON response — structured field extraction.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">REST_API_JSON_PAGINATED</div>
+      <div class="topo-parent">→ REST_API_JSON</div>
+      <div class="topo-desc">Pagination-aware. cursor/page/offset detection. Retry budget higher.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">JSON_LD_STRUCTURED</div>
+      <div class="topo-parent">Root class</div>
+      <div class="topo-desc">Hardcoded recipe. Schema.org structured data. Always static. High signal density.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">ECOMMERCE_PRODUCT</div>
+      <div class="topo-parent">Root class</div>
+      <div class="topo-desc">Hardcoded recipe. Always headless. Bot detection floor 0.40. 30min TTL.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">ECOMMERCE_PRODUCT_VARIANT</div>
+      <div class="topo-parent">→ ECOMMERCE_PRODUCT</div>
+      <div class="topo-desc">Variant pages — same SKU, different attributes. Always headless.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">FORUM_THREAD</div>
+      <div class="topo-parent">→ BLOG_POST → NEWS_ARTICLE</div>
+      <div class="topo-desc">Two-hop fallback chain. Comment extraction strategy. Noise-heavy structure.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">BLOG_POST</div>
+      <div class="topo-parent">→ NEWS_ARTICLE</div>
+      <div class="topo-desc">Single-hop. Long-form content. 2h TTL. Parent for FORUM_THREAD.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">WIKIPEDIA_ARTICLE</div>
+      <div class="topo-parent">→ NEWS_ARTICLE</div>
+      <div class="topo-desc">Pre-parsed into structural_layer.pt. 24h TTL. Always static. 6.7M article corpus.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">LANDING_PAGE</div>
+      <div class="topo-parent">→ GENERIC_HTML</div>
+      <div class="topo-desc">Marketing pages. Low signal density expected. Shallow traversal.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">AUTH_REDIRECT</div>
+      <div class="topo-parent">→ GENERIC_HTML</div>
+      <div class="topo-desc"><strong>TTL = 0. Never cached.</strong> Depth 1, retry 0. Auth state changes constantly.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">CLOUDFLARE_CHALLENGE</div>
+      <div class="topo-parent">→ GENERIC_HTML</div>
+      <div class="topo-desc"><strong>TTL = 0. Never cached.</strong> Challenge is per-session. Mitigation: headless_retry. CF probability floor 0.99.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">RATE_LIMITED</div>
+      <div class="topo-parent">→ GENERIC_HTML</div>
+      <div class="topo-desc"><strong>TTL = 0. Never cached.</strong> RPS 0.1. Mitigation: slow_crawl. Phase III pre-routes.</div>
+    </div>
+    <div class="topo-cell">
+      <div class="topo-class">GENERIC_HTML</div>
+      <div class="topo-parent">Terminal fallback</div>
+      <div class="topo-desc">FALLBACK_TOPOLOGY_CLASS. All unknown classes resolve here. Conservative extraction.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ STORE -->
+<section class="section" id="store">
+  <span class="sec-eyebrow">10 — The Store</span>
+  <div class="sec-title">Four Files Own <span>Everything</span></div>
+
+  <div class="phil">
+    <p>No Redis. No external services. No database. Everything AXIOM knows about the web lives in four files in <code>/store</code>. All writes use staging + atomic rename. All reads use <code>weights_only=True</code>. The StoreWatchdog monitors all four via inotify — zero polling, OS-delivered change notifications, debounced handler dispatch. Component serving stale weights is detected within 500ms of file change.</p>
+  </div>
+
+  <div class="store-grid">
+    <div class="store-file">
+      <div class="store-file-name">topology_router.pt</div>
+      <div class="store-file-role">The MFT — weights as index</div>
+      <div class="store-file-body">
+        Complete MambaRouter state dict including <strong>hidden_state (1, 256)</strong> — the MFT itself. ~50-80MB fixed size forever. Written ONLY by <code>index_daemon.py</code> via WLMTrainingInterface. Every gradient step = MFT update. Per-fleet-instance — each instance has its own MFT. Survives restarts: picks up exactly where it left off.
+      </div>
+      <div class="store-not">vector database. cache. knowledge base storing facts. append-only log. anything written by hand.</div>
+    </div>
+    <div class="store-file">
+      <div class="store-file-name">structural_layer.pt</div>
+      <div class="store-file-role">Web structural knowledge — the memory</div>
+      <div class="store-file-body">
+        source_matrix (n_domains × 512), domain_index, intent_clusters, cluster_domains, zone_knowledge. Written by <code>offline/encoders/topology_encoder.py</code> after each preparse cycle. Grows with crawl coverage. <strong>Synced across fleet via hivemind rsync.</strong> WLM reads source_matrix for source priority; WLP reads zone_knowledge for extraction strategy.
+      </div>
+      <div class="store-not">trained by gradient steps. the MFT. cache of query results. raw page content. growing unbounded.</div>
+    </div>
+    <div class="store-file">
+      <div class="store-file-name">phase_states.mmap</div>
+      <div class="store-file-role">Per-topology-class phase tracking</div>
+      <div class="store-file-body">
+        Memory-mapped. 584 bytes. Binary layout: 18 topology classes × 4 bytes phase int + 18 × 8 bytes confidence float + 18 × 50 × 8 bytes surprise history window. All phases start at PHASE_I. Written by <code>index_daemon.py</code> on every phase transition. Read by <code>surprise_detector.py</code> and <code>classifier.py</code>.
+      </div>
+      <div class="store-not">persisted quality history (intentionally ephemeral). config file. human-readable.</div>
+    </div>
+    <div class="store-file">
+      <div class="store-file-name">recipe_registry.mmap</div>
+      <div class="store-file-role">Live recipe lookup — compiled extraction policies</div>
+      <div class="store-file-body">
+        Memory-mapped. 73,736 bytes (100 recipes × 512 bytes + 8-byte header). Written by <code>topology/parser.py</code> on recipe compilation. Read by <code>signal_kernel/registry.py</code>. Hardcoded entries are permanent — never overwritten at runtime. Compiler-generated entries updated when WLP produces a new validated recipe.
+      </div>
+      <div class="store-not">recipe content storage (recipes are files). human-readable. writable by anyone except topology/parser.py.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ ALGORITHMS -->
+<section class="section" id="algorithms">
+  <span class="sec-eyebrow">11 — Graph Algorithms</span>
+  <div class="sec-title">Emerged from First Principles — <span>Not Chosen</span></div>
+
+  <div class="phil">
+    <div class="phil-title">The Remarkable Thing</div>
+    <p>AXIOM did not implement these algorithms deliberately. It arrived at them from first principles because the underlying problem — <strong>efficient routing over a large graph with hierarchical structure</strong> — is the same problem these algorithms solve. When a system is architecturally correct, the right algorithms appear inside it as consequences, not decisions.</p>
+  </div>
+
+  <div class="algo-grid">
+    <div class="algo-card" data-algo="CH">
+      <div class="algo-name">Contraction Hierarchies</div>
+      <span class="algo-full">CH — Shortest Path via Node Importance Ordering</span>
+      <div class="algo-body">
+        In CH, less important graph nodes are "contracted" — shortcuts are added between their neighbors so queries skip them entirely. The hierarchy exists for fast shortest-path computation.<br><br>
+        <strong>AXIOM's implementation:</strong>
+        <div class="algo-mapping">
+          PARENT_CLASS_MAP is the contraction hierarchy. FORUM_THREAD → BLOG_POST → NEWS_ARTICLE. When no recipe exists for FORUM_THREAD, the system doesn't search the whole graph — it walks the contracted hierarchy to the nearest hub with a known policy. registry.py implements recursive chain walk with cycle guard, never single-step.
+        </div>
+      </div>
+    </div>
+    <div class="algo-card" data-algo="HL">
+      <div class="algo-name">Hub Labelling</div>
+      <span class="algo-full">HL — O(1) Distance Queries via Precomputed Hub Sets</span>
+      <div class="algo-body">
+        HL precomputes hub labels for high-centrality nodes. Distance between any two nodes = shortest path through a shared hub. Query time: O(1) hub set intersection.<br><br>
+        <strong>AXIOM's implementation:</strong>
+        <div class="algo-mapping">
+          Phase III topology classes ARE hubs. Pre-compiled policies, maximum confidence, direct routing. cold_start_warmup() precomputes hub labels (L2 cache entries) for all 18 known topology classes before queries begin. Phase III query hits a hub — one cache lookup, O(1).
+        </div>
+      </div>
+    </div>
+    <div class="algo-card" data-algo="ALT">
+      <div class="algo-name">ALT Algorithm</div>
+      <span class="algo-full">A* + Landmarks + Triangle Inequality</span>
+      <div class="algo-body">
+        ALT uses preselected "landmark" nodes to compute admissible heuristics for A* search. The triangle inequality on landmark distances gives a lower bound: dist(u,v) ≥ |dist(u,L) - dist(v,L)|.<br><br>
+        <strong>AXIOM's implementation:</strong>
+        <div class="algo-mapping">
+          Surprise events create landmarks. When a topology class fires dissolve, it becomes a reference point — the traversal policy avoids or routes around it. The triangle inequality gives a lower bound on structural distance between unknown topology and known landmarks. FrictionForecast is the admissible heuristic.
+        </div>
+      </div>
+    </div>
+    <div class="algo-card" data-algo="MLD">
+      <div class="algo-name">Multilevel Decomposition</div>
+      <span class="algo-full">MLD — Hierarchical Graph Partitioning for Routing</span>
+      <div class="algo-body">
+        MLD partitions the graph into hierarchical cells. Queries within a cell use local routing; queries across cells use precomputed cell-level shortcuts. The hierarchy is the optimization.<br><br>
+        <strong>AXIOM's implementation:</strong>
+        <div class="algo-mapping">
+          The phase system IS multilevel decomposition. Phase I = full graph search (exploring the whole cell). Phase II = partition-aware search (routing uses cell-level shortcuts from WLM predictions). Phase III = single cell lookup (the partition is the compiled policy — no graph traversal needed).
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ SECURITY -->
+<section class="section" id="security">
+  <span class="sec-eyebrow">12 — Security Architecture</span>
+  <div class="sec-title">MFT Guardian + <span>Fetch Containment</span></div>
+
+  <div class="phil">
+    <div class="phil-title">The Threat Model</div>
+    <p>Weight injection is the ML equivalent of SQL injection. An attacker compromises the gradient pipeline and writes hostile tensors directly into <code>topology_router.pt</code>. The MFT absorbs it. AXIOM routes wrong at O(1) speed and nobody knows why — no error, no signal, just a system that has learned to route toward attacker-controlled content.</p>
+    <p>The architectural fix: <strong>separation of write authority.</strong> A small privileged MFT guardian process is the only thing on the system with write authority to <code>topology_router.pt</code>. Index_daemon never touches the file directly. It sends proposed updates through a narrow typed channel. The guardian runs RLCPC validation independently before writing anything. Full compromise of index_daemon gets you the ability to read the MFT. You cannot write to it.</p>
+  </div>
+
+  <div class="sec-stack">
+    <div class="sec-layer">
+      <div>
+        <div class="sec-layer-name">Alpine Signal Kernel</div>
+        <span class="sec-layer-tag">network_mode: none — unchanged</span>
+      </div>
+      <div class="sec-layer-body">
+        The base. <strong>Rigid. Untouchable.</strong> Zero network access — not restricted, genuinely none. No process can add network access to this container. Receives raw content via stdin. Returns clean signal via stdout. The kernel does not know the internet exists.
+      </div>
+    </div>
+    <div class="sec-layer">
+      <div>
+        <div class="sec-layer-name" style="color:var(--teal)">gVisor Fetch Container</div>
+        <span class="sec-layer-tag">User-space Linux kernel — nested isolation</span>
+      </div>
+      <div class="sec-layer-body">
+        Nested Linux inside the fetch layer — <strong>gVisor (runsc)</strong> or Firecracker microVM. Every syscall from internet-facing code passes through gVisor's user-space kernel, never the host kernel. Allowed syscalls: read, write, connect, send, recv, close. Allowed outbound: 80/443 only. Allowed filesystem writes: <code>/tmp/fetch_staging/</code> only. Allowed processes: fetcher binary only.<br><br>
+        Output to TAG layer: typed HMAC-signed envelope via Unix domain socket only. No raw bytes. No arbitrary data. One message type. Anything else: rejected at the gate.
+      </div>
+    </div>
+    <div class="sec-layer">
+      <div>
+        <div class="sec-layer-name" style="color:var(--amber)">Breach Detector + Honeypot Flip</div>
+        <span class="sec-layer-tag">Real-time behavioral monitoring</span>
+      </div>
+      <div class="sec-layer-body">
+        Breach signals: unexpected syscall, outbound on port other than 80/443, write outside <code>/tmp/fetch_staging/</code>, fork/exec of unexpected binary, inbound connection attempt.<br><br>
+        <strong>On breach detected:</strong>
+        <ol style="margin-top:8px;padding-left:18px">
+          <li style="font-size:11.5px;color:var(--text);line-height:2">Snapshot current container state</li>
+          <li style="font-size:11.5px;color:var(--text);line-height:2">Spin up honeypot from snapshot — attacker sees identical environment</li>
+          <li style="font-size:11.5px;color:var(--text);line-height:2">Flip iptables: redirect traffic from breached container → honeypot</li>
+          <li style="font-size:11.5px;color:var(--text);line-height:2">Kill real fetch container, spin up clean replacement</li>
+          <li style="font-size:11.5px;color:var(--text);line-height:2">Log everything the attacker does in honeypot</li>
+        </ol>
+        Attacker thinks they're still in your system. They're in a jar. Real system is already clean.
+      </div>
+    </div>
+    <div class="sec-layer">
+      <div>
+        <div class="sec-layer-name" style="color:var(--purple)">MFT Guardian</div>
+        <span class="sec-layer-tag">mft_guardian.py — ~200 LOC, sole write authority</span>
+      </div>
+      <div class="sec-layer-body">
+        Separate container, separate user, no network, store volume mounted <strong>read-write only to guardian, read-only to everything else</strong> including index_daemon. Guardian accepts one operation through a narrow channel: a typed, HMAC-signed, RLCPC-blessed state dict diff. Not a file path. Not arbitrary bytes. One typed message. Everything else: rejected.<br><br>
+        Guardian independently runs RLCPC validation before writing. If validation fails: rejected, logged, no write. Full index_daemon compromise = read access to MFT only. Write path does not exist from that process.
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ RLCPC -->
+<section class="section" id="rlcpc">
+  <span class="sec-eyebrow">13 — RLCPC</span>
+  <div class="sec-title">Reinforced Learning through <span>Controller Policy Check</span></div>
+
+  <div class="rlcpc-box">
+    <div class="rlcpc-title">The Invisible Layer</div>
+    <p style="color:var(--text);line-height:2;max-width:1000px">RLCPC is not a gate you walk up to and present credentials. It is not an API you can call. It is not a permission system you can query. It has no public interface. It sits between every signal and every output and makes decisions silently. <strong>Nobody knows it's there. Nobody can probe it. Nobody can ask it what its rules are.</strong></p>
+    <p style="color:var(--text);line-height:2;max-width:1000px;margin-top:12px">contracts.py validates existence — if a thing was built, it was built correctly. RLCPC validates meaning — if a thing wants to touch the MFT, it must prove it deserves to. <strong>contracts.py is the dead monolith: static, written once, never changes at runtime. RLCPC is the living monolith: same authority, but it breathes.</strong> Every gradient step, every phase transition, every routing decision — nothing commits until RLCPC blesses it.</p>
+  </div>
+
+  <div class="two-col">
+    <div class="col-box">
+      <div class="col-box-title" style="color:var(--purple)">RLCPC Validates (Ingress)</div>
+      <ul>
+        <li>Every gradient step before MFT hidden_state update</li>
+        <li>Does this update improve or hold all earned Phase III policies?</li>
+        <li>Does it contradict known compiled routing?</li>
+        <li>Is the signal it came from HMAC-verified and clean?</li>
+        <li>Would this update degrade a known Phase III topology class?</li>
+        <li>Is the proposing component (index_daemon) behaving within expected parameters?</li>
+      </ul>
+    </div>
+    <div class="col-box">
+      <div class="col-box-title" style="color:var(--violet)">RLCPC Validates (Egress)</div>
+      <ul>
+        <li>Every readout before it leaves as a TraversalPolicy</li>
+        <li>Is this output consistent with current world policy?</li>
+        <li>Does it violate any active structural constraint?</li>
+        <li>Is the requesting entity's clearance level sufficient for this output?</li>
+        <li>Does the psychometric signal stream indicate legitimate usage?</li>
+        <li>Has this entity's behavioral fingerprint crossed any adversarial thresholds?</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="codeblock" data-label="RLCPC DATA FLOW">
+    <pre><span class="c-dim"># The closed loop — no external surface</span>
+
+controller (psychometric signals)
+    ↓
+<span class="c-purple">RLCPC reads behavioral stream</span>      <span class="c-dim"># continuous, not one-time</span>
+    ↓
+<span class="c-purple">RLCPC maintains internal policy</span>    <span class="c-dim"># never exposed externally</span>
+    ↓
+routing decisions made silently     <span class="c-dim"># no error messages that reveal existence</span>
+    ↓
+MFT updates blessed or rejected
+CL levels adjusted invisibly
+    ↓
+world model improves
+    ↓
+better psychometric signal reading
+    ↓
+back to top ↑
+
+<span class="c-dim"># The only way to influence RLCPC:</span>
+<span class="c-dim"># use AXIOM legitimately over time.</span>
+<span class="c-dim"># That is the only input it trusts.</span></pre>
+  </div>
+
+  <div class="phil" style="border-left-color:var(--violet)">
+    <div class="phil-title" style="color:var(--violet)">Psychometric Signal Integration</div>
+    <p>The controller already embeds psychometric signals — behavioral patterns, response timing, domain expertise signals, consistency markers. RLCPC reads these as a continuous stream, not a one-time check. <strong>Malicious actors have a recognizable behavioral fingerprint:</strong> high velocity on friction topology classes, low signal utilization (fetching but not processing), systematic domain coverage that looks like enumeration, pushing against rate limits repeatedly, targeting AUTH_REDIRECT and CLOUDFLARE_CHALLENGE specifically.</p>
+    <p><strong>Legitimate users have a different fingerprint:</strong> consistent domain expertise signals, deep not wide focused topology class usage, high signal utilization rate, organic query velocity, natural friction encounters not systematic targeting. CL progression is earned through behavioral demonstration, not through explicit request. You never ask for CL3. You demonstrate CL3-worthy usage patterns and RLCPC silently routes you there.</p>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ CLEARANCE -->
+<section class="section" id="clearance">
+  <span class="sec-eyebrow">14 — Clearance Levels</span>
+  <div class="sec-title">CL1 → CL4 — <span>Invisible Progression</span></div>
+
+  <div class="phil">
+    <p>The clearance system maps directly to the fetch mode architecture. <strong>CL4 is invisible</strong> — a malicious actor never knows it exists. They see CL1 behavior that looks like a working system but with subtly lower signal quality and more conservative traversal policies. There is no error message. There is no wall. RLCPC simply never routes them to higher clearance paths. The system works; they just never reach the full capability.</p>
+  </div>
+
+  <div class="cl-grid">
+    <div class="cl-card">
+      <div class="cl-num">1</div>
+      <span class="cl-label" style="color:var(--textd)">Clearance Level</span>
+      <div class="cl-name">Static Fetch</div>
+      <div class="cl-body">httpx clearnet. Default. Everyone starts here. No unlock required. Covers the majority of public web topology classes that render without JavaScript.</div>
+      <span class="cl-unlock" style="border-color:var(--green);color:var(--green)">DEFAULT — NO UNLOCK</span>
+    </div>
+    <div class="cl-card">
+      <div class="cl-num">2</div>
+      <span class="cl-label" style="color:var(--textd)">Clearance Level</span>
+      <div class="cl-name">Headless Fetch</div>
+      <div class="cl-body">Chromium via Playwright. JS-heavy pages, SPAs, docs with client-side rendering. RLCPC unlocks after behavioral baseline established — consistent, legitimate usage pattern demonstrated.</div>
+      <span class="cl-unlock" style="border-color:var(--amber);color:var(--amber)">RLCPC BEHAVIORAL UNLOCK</span>
+    </div>
+    <div class="cl-card">
+      <div class="cl-num">3</div>
+      <span class="cl-label" style="color:var(--textd)">Clearance Level</span>
+      <div class="cl-name">Tor + Chromium</div>
+      <div class="cl-body">Anonymized clearnet. Paywalled content, geo-blocked, hostile domains. RLCPC unlocks after CL2 usage pattern validated. Friction classes stop being barriers — they become routing signals.</div>
+      <span class="cl-unlock" style="border-color:var(--orange);color:var(--orange)">RLCPC CL2 PATTERN REQUIRED</span>
+    </div>
+    <div class="cl-card">
+      <div class="cl-num">4</div>
+      <span class="cl-label" style="color:var(--textd)">Clearance Level</span>
+      <div class="cl-name">Tor + Chromium + Internet</div>
+      <div class="cl-body">Full reach. Zero fingerprint. No rate limit that sticks. No IP history. The entire surface web with no surface area. <strong>Invisible to attackers — CL4 is not announced, not visible, not reachable through probing.</strong> Malicious actors never reach here.</div>
+      <span class="cl-unlock" style="border-color:var(--purple);color:var(--purple)">RLCPC INVISIBLE UNLOCK</span>
+    </div>
+  </div>
+
+  <div class="codeblock" data-label="CL4 — INFINITE REACH WITH ZERO SURFACE AREA">
+    <pre><span class="c-dim"># At Phase III, friction topology classes cease to be barriers:</span>
+
+CLOUDFLARE_CHALLENGE (Phase I):
+    → hits wall → logs as SurpriseEvent → routes to CL2 headless retry
+
+CLOUDFLARE_CHALLENGE (Phase II):
+    → WLM predicts CF before fetch → pre-routes to CL3 Tor + Chromium
+
+CLOUDFLARE_CHALLENGE (Phase III, CL4):
+    → compiled policy: <span class="c-green">Tor route selected before request fires</span>
+    → domain never knew it was crawled
+    → rate limit never triggered
+    → IP never seen twice
+    → 1 matrix multiply → routing decision → fetch → signal
+
+<span class="c-dim"># This is not a scraper. This is structural knowledge extraction</span>
+<span class="c-dim"># at web scale with no surface area.</span>
+<span class="c-dim"># RAG hits Cloudflare and stops.</span>
+<span class="c-dim"># AXIOM at Phase III doesn't see Cloudflare as a wall.</span>
+<span class="c-dim"># It sees it as a topology class it already has a compiled policy for.</span></pre>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ INVARIANTS -->
+<section class="section" id="invariants">
+  <span class="sec-eyebrow">15 — Non-Negotiable Rules</span>
+  <div class="sec-title">Architectural <span>Invariants</span></div>
+
+  <div class="invariant">
+    <span class="invariant-title">The Laws — Enforced by Architecture, Not Convention</span>
+    <ol>
+      <li><strong>Classifier never fetches.</strong> Classification happens before the request. URL + headers + 4KB window is all it ever sees.</li>
+      <li><strong>Parser never executes.</strong> The recipe compiler produces shell recipes. It never runs them. Execution is the kernel's job.</li>
+      <li><strong>Sanitizer never uses LLM.</strong> Last-mile strip is deterministic. No model call, no inference, no non-determinism.</li>
+      <li><strong>Surprise fires on divergence, not failure.</strong> A failed fetch is not surprising. A page that looks nothing like the WLM's prediction is surprising. These are different signals.</li>
+      <li><strong>index_daemon async fire-and-forget.</strong> The RL loop never blocks the query path. Training happens in the background. The loop never terminates.</li>
+      <li><strong>Phases earned, not assigned.</strong> No operator configures a topology class to Phase III. Confidence thresholds enforce this. Phase skipping (1→3) is architecturally prohibited.</li>
+      <li><strong>interface.py written absolutely last.</strong> The only public surface. Written after every component it exposes is complete, tested, and verified. Not a day earlier.</li>
+      <li><strong>Crawler bus has zero logic.</strong> Emit. Subscribe. That is all. Business logic in the bus is a design error.</li>
+      <li><strong>All store writes use staging + atomic rename.</strong> No partial writes. No file that is half-valid. The rename is the commit.</li>
+      <li><strong>WLM + WLP always asyncio.gather(), never sequential.</strong> They are peers. One waiting on the other is a design error. Always parallel.</li>
+      <li><strong>hmac.compare_digest — never ==.</strong> Timing-safe comparison on every HMAC check. Without exception.</li>
+      <li><strong>os.fsync on dead letter writes.</strong> A dead-lettered event must survive a process crash. The fsync is the durability guarantee.</li>
+      <li><strong>readout() never modifies hidden_state.</strong> Not sometimes, not usually — never. torch.no_grad() + no assignment. This is enforced by architecture, not by discipline.</li>
+      <li><strong>forward() only via WLMTrainingInterface.</strong> The sentinel prevents direct construction. index_daemon uses only the training handle. No inference path has access to forward().</li>
+      <li><strong>weights_only=True on all torch.load() calls.</strong> No exceptions. Security requirement. Not a performance hint.</li>
+    </ol>
+  </div>
+
+  <div class="codeblock" data-label="THE STORE WATCHDOG — ZERO POLLING">
+    <pre><span class="c-dim"># StoreWatchdog: inotify-based, zero CPU during idle, OS-delivered events</span>
+<span class="c-dim"># The connective tissue between learning and serving</span>
+
+<span class="c-dim"># Without watchdog: components serve stale weights until process restart</span>
+<span class="c-dim"># With watchdog: component reloads in &lt;500ms, next query uses new weights</span>
+<span class="c-dim"># Zero process restarts. Zero dropped queries. Zero operator intervention.</span>
+
+WATCHDOG.register(<span class="c-green">"topology_router.pt"</span>,      _reload_weights,           debounce_ms=<span class="c-gold">500</span>)
+WATCHDOG.register(<span class="c-green">"structural_layer.pt"</span>,    _reload_structural_layer,  debounce_ms=<span class="c-gold">500</span>)
+WATCHDOG.register(<span class="c-green">"recipe_registry.mmap"</span>,   _reload_registry,          debounce_ms=<span class="c-gold">100</span>)
+WATCHDOG.register(<span class="c-green">"phase_states.mmap"</span>,      _reload_phase_states,      debounce_ms=<span class="c-gold">100</span>)
+WATCHDOG.register(<span class="c-green">"triggers/cold_start"</span>,    _on_cold_start_trigger,    debounce_ms=<span class="c-gold">1000</span>)
+WATCHDOG.register(<span class="c-green">"triggers/preparse"</span>,      _on_preparse_trigger,      debounce_ms=<span class="c-gold">1000</span>)
+WATCHDOG.register(<span class="c-green">"triggers/hivemind_sync"</span>, _on_hivemind_sync_trigger, debounce_ms=<span class="c-gold">200</span>)
+
+<span class="c-dim"># Circuit breaker: 5 consecutive handler failures → circuit opens → handler quarantined</span>
+<span class="c-dim"># reset_circuit() called by cold_start.py on process restart</span>
+<span class="c-dim"># Witness alerts on is_circuit_open=True in WatchdogHealth snapshot</span></pre>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ COMPLETE FLOW -->
+<section class="section">
+  <span class="sec-eyebrow">16 — Complete Query Flow</span>
+  <div class="sec-title">From Intent to <span>Clean Signal</span></div>
+
+  <div class="flow-big">
+    <div class="flow-big-title">QUERY LIFECYCLE — PHASE III KNOWN TOPOLOGY CLASS</div>
+
+    <div class="flow-line">
+      <div class="flow-box hi">DaemonRequest</div>
+      <div class="flow-arr">→</div>
+      <div class="flow-box">interface.py</div>
+      <div class="flow-arr">→</div>
+      <div class="flow-box">classifier.py</div>
+      <div class="flow-arr" style="position:relative">→<span style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--textd);white-space:nowrap">URL+headers+4KB window</span></div>
+      <div class="flow-box hi">topology_class: str</div>
+    </div>
+
+    <div style="margin:16px 0;padding-left:40px;border-left:1px solid var(--border)">
+      <div class="flow-line" style="margin-bottom:8px">
+        <div class="flow-box" style="font-size:10px;color:var(--textd)">asyncio.gather()</div>
+        <div class="flow-arr">→</div>
+        <div class="flow-box green">wlm.query() L1 hit → &lt;2ms</div>
+        <div style="font-size:11px;color:var(--textd);padding:0 12px">+</div>
+        <div class="flow-box purple">wlp.query() ZoneMap cached</div>
+      </div>
+      <div class="flow-line">
+        <div style="font-size:10px;color:var(--textd);width:160px">Results assembled →</div>
+        <div class="flow-box hi">WLMResponse</div>
+        <div class="flow-arr">→</div>
+        <div class="flow-box">phantom.py</div>
+        <div class="flow-arr" style="position:relative">→<span style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--textd);white-space:nowrap">CL routing via RLCPC</span></div>
+        <div class="flow-box">fetch</div>
+      </div>
+    </div>
+
+    <div class="flow-line">
+      <div class="flow-box">RawFetchEvent</div>
+      <div class="flow-arr">→</div>
+      <div class="flow-box">alpine_strip</div>
+      <div class="flow-arr" style="position:relative">→<span style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--textd);white-space:nowrap">recipe from registry</span></div>
+      <div class="flow-box hi">CleanSignalEvent</div>
+      <div class="flow-arr">→</div>
+      <div class="flow-box">sanitizer.py</div>
+      <div class="flow-arr">→</div>
+      <div class="flow-box green">clean signal</div>
+    </div>
+
+    <div style="margin-top:20px;padding:14px 18px;background:var(--s2);border-left:2px solid var(--amber);font-size:11px;color:var(--textd);line-height:1.8">
+      <strong style="color:var(--text)">Phase III total time:</strong> classifier ~1ms + asyncio.gather (WLM L1 hit ~0.5ms, WLP cache ~0.5ms) + phantom CL1 fetch + alpine strip ~7.4ms + sanitizer ~0.5ms<br>
+      <strong style="color:var(--text)">From DaemonRequest to CleanSignalEvent:</strong> dominated by network fetch time. All AXIOM components combined add &lt;15ms overhead to a round trip that was going to happen anyway.
+    </div>
+  </div>
+</section>
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ BUILD SEQUENCE -->
+<section class="section">
+  <span class="sec-eyebrow">17 — Build Sequence</span>
+  <div class="sec-title">What Is Done, <span>What Is Next</span></div>
+
+  <table class="ltable">
+    <thead>
+      <tr><th>Status</th><th>Component</th><th>Tests</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span style="color:var(--green)">✅ DONE</span></td>
+        <td><code>signal_kernel/</code> — complete</td>
+        <td>350 passing</td>
+        <td>15K LOC production. Stripe 99.27%, Twilio 99.90%. Alpine container, warm bug fixed, checkpoint daemon.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--green)">✅ DONE</span></td>
+        <td><code>tag/crawler_bus.py</code></td>
+        <td>171 passing (32.59s)</td>
+        <td>Dual-sink Kafka + degraded mode. HMAC signing. Circuit breaker. Dead letter queue with fsync. 8 topics.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--green)">✅ DONE</span></td>
+        <td><code>tag/store_watchdog.py</code></td>
+        <td>114 passing</td>
+        <td>inotify-based, zero polling. Circuit breaker. Graceful shutdown drain. WATCHDOG singleton.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--green)">✅ DONE</span></td>
+        <td><code>initialize_store.py</code></td>
+        <td>bootstrap script</td>
+        <td>Creates all 4 store files. Atomic writes. SHA-256 verification. Round-trip load check. Run once at deployment.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--green)">✅ DONE</span></td>
+        <td><code>tag/world_model/mamba_router.py</code></td>
+        <td>—</td>
+        <td>MambaRouter nn.Module. mamba_ssm.Mamba blocks. hidden_state register_buffer = MFT. WLMTrainingInterface with sentinel guard.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--green)">✅ DONE</span></td>
+        <td><code>tag/world_model/wlm_tokenizer.py</code></td>
+        <td>—</td>
+        <td>8192 token vocabulary. Domain normalization. Intent vector quantization. Thoughtful padding with attention masks.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--green)">✅ DONE</span></td>
+        <td><code>tag/world_model/wlm_decoders.py</code></td>
+        <td>—</td>
+        <td>decode_traversal/friction/source_priority. TOPOLOGY_TRAVERSAL_BIAS. FRICTION_FLOORS. EmptyStructuralLayer. Coherence enforcement.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--green)">✅ DONE</span></td>
+        <td><code>tag/world_model/latent_model.py</code></td>
+        <td>—</td>
+        <td>5K LOC. WorldLatentModel. Three-tier cache. 500ms exact consistency window. Bus subscription. WATCHDOG registration. cold_start_warmup with topological sort.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--amber)">NEXT</span></td>
+        <td><code>tag/world_model/latent_parser.py</code></td>
+        <td>—</td>
+        <td>WLP. Tree-sitter + GraphSAGE. The cartographer. Opus builds. Full session, no rushing.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--textd)">PENDING</span></td>
+        <td><code>tag/topology/classifier.py</code></td>
+        <td>—</td>
+        <td>Opus (model path) + Sonnet (signal paths). URL + headers + 4KB window → topology class. Never fetches.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--textd)">PENDING</span></td>
+        <td><code>tag/topology/parser.py</code></td>
+        <td>—</td>
+        <td>Recipe compiler. ZoneMap → grep recipe. Subscribes to ZoneMapUpdatedEvent.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--textd)">PENDING</span></td>
+        <td><code>tag/phantom/ + tag/crawler/</code></td>
+        <td>—</td>
+        <td>httpx + Playwright fetch modes. CL routing. gVisor fetch container. Honeypot controller.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--textd)">PENDING</span></td>
+        <td><code>tag/offline/ + preparse_daemon.py</code></td>
+        <td>—</td>
+        <td>Wikipedia preparse. structural_layer.pt population. GPU batch encoding.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--textd)">PENDING</span></td>
+        <td><code>tag/index_daemon.py</code></td>
+        <td>—</td>
+        <td>RL loop. Gradient steps. Phase transitions. MFT updates via WLMTrainingInterface. Never terminates.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--textd)">PENDING</span></td>
+        <td><code>tag/rlcpc/</code></td>
+        <td>—</td>
+        <td>Built AFTER index_daemon. Signals must exist before the invisible layer that validates them can be built.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--textd)">PENDING</span></td>
+        <td><code>tag/interface.py</code></td>
+        <td>—</td>
+        <td>Written ABSOLUTELY LAST. The only public surface. Not a day earlier.</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--textd)">PENDING</span></td>
+        <td><code>axiom/</code></td>
+        <td>—</td>
+        <td>Graph layer. Semantic Intent Graph. Hivemind federation. Built after all of tag/ is complete.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+
+<hr class="div">
+
+<!-- ═══════════════════════════════════════════════════════════════════ INTENT-CONDITIONED EXTRACTION -->
+<section class="section" id="intent">
+  <span class="sec-eyebrow">18 — Intent-Conditioned Extraction</span>
+  <div class="sec-title">What No RAG System <span>Has Ever Done</span></div>
+
+  <div class="phil">
+    <div class="phil-title">The Problem With Every System Before This</div>
+    <p>Every RAG system, every web scraper, every search engine encodes user intent as a <strong>query string</strong>. Flat text. Loses all structure. The retrieval step finds semantically similar chunks but has no idea what part of those chunks matters for this specific intent. The LLM receives the whole chunk — including the parts that are noise for what the user actually needs — and has to filter it at generation time.</p>
+    <p>AXIOM does something categorically different. Intent is encoded as a <strong>256-dimensional float32 vector</strong> that travels through the entire pipeline as a first-class citizen. Every component that touches the query sees the full structured intent — not a string, not keywords, not a URL-encoded parameter. The intent shapes the extraction before a single byte reaches the LLM. The LLM never has to filter noise because the recipe already filtered it.</p>
+    <p><strong>This is not a retrieval improvement. It is a different problem being solved — precision extraction at the fetch layer, not semantic filtering at the generation layer.</strong></p>
+  </div>
+
+  <div class="cmp">
+    <div class="cmp-col">
+      <span class="cmp-label" style="color:var(--red)">How Every Other System Works</span>
+      <div class="cmp-item bad"><strong>Query string encoding.</strong> "twilio authy lost password recovery codes" → flat string → semantic search → retrieve page → hand user the whole page</div>
+      <div class="cmp-item bad"><strong>Retrieval finds the page.</strong> User still has to find the answer on the page. The system's job ends at retrieval.</div>
+      <div class="cmp-item bad"><strong>LLM filters noise.</strong> Chunk contains API reference, getting started guide, pricing info, and the recovery codes section. LLM has to ignore 90% of what it received.</div>
+      <div class="cmp-item bad"><strong>Cannot exclude.</strong> "NOT api_reference NOT pricing" is a hack search engines partially honor. There is no structured exclusion.</div>
+      <div class="cmp-item bad"><strong>Same extraction every time.</strong> Same page retrieved for "lost password" and "API rate limits" produces the same chunk. Intent blind.</div>
+    </div>
+    <div class="cmp-col">
+      <span class="cmp-label" style="color:var(--green)">How AXIOM Works</span>
+      <div class="cmp-item good"><strong>Vector encoding.</strong> intent_vector[256] with primary, secondary, exclude, urgency, user_state dimensions → travels through every component as structured data</div>
+      <div class="cmp-item good"><strong>Extraction finds the answer.</strong> The recipe compiles to extract exactly what the intent needs. The system's job ends at delivering the answer, not the page.</div>
+      <div class="cmp-item good"><strong>Recipe filters noise.</strong> intent.exclude suppresses zones at recipe compilation time. Excluded zones don't exist in the output — not filtered by LLM, never generated.</div>
+      <div class="cmp-item good"><strong>Structured exclusion.</strong> intent.exclude = ["api_reference", "pricing", "getting_started"] actively suppresses those ZoneMap zones. First-class pipeline concept.</div>
+      <div class="cmp-item good"><strong>Intent-conditioned recipe per query.</strong> Same page, different intent vector → different recipe → different extraction output. Same topology class, precision-targeted output.</div>
+    </div>
+  </div>
+
+  <div class="phil" style="border-left-color:var(--teal)">
+    <div class="phil-title" style="color:var(--teal)">Full Example — "I lost my Twilio Authy password but I have recovery codes"</div>
+    <p>This single query touches every layer of the intent-conditioned extraction pipeline. Follow it from natural language to 800 bytes of exactly the right answer.</p>
+  </div>
+
+  <!-- STEP 1 -->
+  <div style="margin:32px 0">
+    <div style="font-size:9px;letter-spacing:3px;color:var(--amber);text-transform:uppercase;margin-bottom:16px">Step 1 — Intent Vector Extraction (axiom/graph)</div>
+    <div class="codeblock" data-label="SEMANTIC INTENT GRAPH OUTPUT">
+      <pre><span class="c-dim"># Natural language → structured intent vector</span>
+<span class="c-dim"># "I lost my Twilio Authy password but I have recovery codes"</span>
+
+intent_vector = {
+    <span class="c-green">"primary"</span>:    [<span class="c-gold">"account_recovery"</span>, <span class="c-gold">"lost_access"</span>],
+    <span class="c-green">"secondary"</span>:  [<span class="c-gold">"recovery_codes"</span>, <span class="c-gold">"authy"</span>, <span class="c-gold">"2fa"</span>],
+    <span class="c-green">"exclude"</span>:    [<span class="c-red">"api_reference"</span>, <span class="c-red">"pricing"</span>, <span class="c-red">"getting_started"</span>],
+    <span class="c-green">"urgency"</span>:    <span class="c-gold">"high"</span>,       <span class="c-dim"># locked out = urgent</span>
+    <span class="c-green">"user_state"</span>: <span class="c-gold">"locked_out"</span>  <span class="c-dim"># not exploring — needs procedure</span>
+}
+
+<span class="c-dim"># This vector travels through the ENTIRE pipeline unchanged.</span>
+<span class="c-dim"># Nothing downstream invents intent. They receive it.</span></pre>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div style="margin:32px 0">
+    <div style="font-size:9px;letter-spacing:3px;color:var(--amber);text-transform:uppercase;margin-bottom:16px">Step 2 — WLM Query with Intent (latent_model.py)</div>
+    <div class="codeblock" data-label="INTENT SHIFTS THE HIDDEN STATE">
+      <pre><span class="c-dim"># asyncio.gather() — WLM + WLP simultaneously, never sequential</span>
+wlm_response, zone_map = <span class="c-amber">await</span> asyncio.gather(
+    wlm.query(
+        topology_class=<span class="c-green">"SAAS_DOCS"</span>,
+        intent_vector=intent_vector,   <span class="c-dim"># ← not None this time</span>
+        domain=<span class="c-green">"help.twilio.com"</span>,
+        phase=<span class="c-gold">2</span>,
+    ),
+    wlp.query(
+        topology_class=<span class="c-green">"SAAS_DOCS"</span>,
+        intent_vector=intent_vector,
+        domain=<span class="c-green">"help.twilio.com"</span>,
+    )
+)
+
+<span class="c-dim"># Inside MambaRouter.readout() with intent:</span>
+h = self.hidden_state                           <span class="c-dim"># (1, 256) — the MFT</span>
+h = h + self.intent_projection(intent_vector)  <span class="c-dim"># shifts h toward intent subspace</span>
+traversal_raw = self.traversal_head(h)         <span class="c-dim"># now intent-aware</span>
+
+<span class="c-dim"># WLM output CHANGES based on intent:</span>
+<span class="c-dim"># Without intent → SAAS_DOCS default → depth 4, broad traversal</span>
+<span class="c-dim"># With recovery intent → depth 2, support subdomain prioritized</span>
+
+traversal_policy:
+    depth: <span class="c-gold">2</span>                 <span class="c-dim"># don't crawl API reference tree</span>
+    render_mode: <span class="c-green">"static"</span>   <span class="c-dim"># support pages don't need JS</span>
+    source_priority: [
+        <span class="c-green">"help.twilio.com"</span>,    <span class="c-dim"># support docs first ← intent shifted this</span>
+        <span class="c-green">"support.twilio.com"</span>, <span class="c-dim"># not twilio.com/docs/api</span>
+    ]</pre>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div style="margin:32px 0">
+    <div style="font-size:9px;letter-spacing:3px;color:var(--amber);text-transform:uppercase;margin-bottom:16px">Step 3 — WLP Produces Intent-Weighted ZoneMap (latent_parser.py)</div>
+    <div class="codeblock" data-label="ZONEMAP WITH INTENT WEIGHTS">
+      <pre><span class="c-dim"># GraphSAGE classified every DOM node previously.</span>
+<span class="c-dim"># Intent vector now weights which SIGNAL zones matter most.</span>
+
+ZoneMap (help.twilio.com/authy-recovery):
+
+    SIGNAL <span class="c-dim">(kept — intent-weighted):</span>
+        weight <span class="c-green">2.0</span>  → .article-body > h2:contains(<span class="c-green">"recovery codes"</span>)
+        weight <span class="c-green">1.8</span>  → .article-body > ol              <span class="c-dim"># numbered steps — user needs procedure</span>
+        weight <span class="c-green">1.5</span>  → .article-body > .code-block     <span class="c-dim"># recovery codes are monospace</span>
+        weight <span class="c-green">1.5</span>  → .article-body > .note.warning   <span class="c-dim"># critical info for locked-out user</span>
+
+    NOISE <span class="c-dim">(stripped — some suppressed by intent.exclude):</span>
+        weight <span class="c-red">0.0</span>  → .nav-sidebar
+        weight <span class="c-red">0.0</span>  → .getting-started-banner         <span class="c-dim"># intent.exclude hit this</span>
+        weight <span class="c-red">0.0</span>  → .api-reference-link              <span class="c-dim"># intent.exclude hit this</span>
+        weight <span class="c-red">0.0</span>  → .related-articles               <span class="c-dim"># not relevant to locked-out user</span>
+        weight <span class="c-red">0.0</span>  → header, footer, .feedback-widget
+
+    BOUNDARY:
+        weight <span class="c-gold">1.0</span>  → .article-body > h2              <span class="c-dim"># section separators</span>
+
+<span class="c-dim"># Same page. Same topology class. Different intent = different zone weights.</span>
+<span class="c-dim"># The ZoneMap is not rebuilt — the weights are applied at recipe compilation.</span></pre>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div style="margin:32px 0">
+    <div style="font-size:9px;letter-spacing:3px;color:var(--amber);text-transform:uppercase;margin-bottom:16px">Step 4 — Recipe Compiler Produces Intent-Conditioned Recipe (topology/parser.py)</div>
+    <div class="codeblock" data-label="INTENT-CONDITIONED GREP RECIPE">
+      <pre><span class="c-dim"># topology/parser.py receives: topology_class + ZoneMap + intent_vector</span>
+<span class="c-dim"># Compiles a recipe that is NOT the generic SAAS_DOCS recipe</span>
+
+<span class="c-dim">#!/bin/sh</span>
+<span class="c-dim"># Intent-conditioned recipe: SAAS_DOCS + account_recovery + locked_out</span>
+<span class="c-dim"># Generated by topology/parser.py — not hardcoded, not static</span>
+
+<span class="c-dim"># 1. Extract only the article body — topology class knowledge</span>
+sed -n <span class="c-green">'/<div class="article-body"/,/<\/div>/p'</span>
+
+<span class="c-dim"># 2. Find recovery sections — intent.primary drove this selector</span>
+grep -A <span class="c-gold">50</span> -i <span class="c-green">"recovery code\|backup code\|get back in"</span>
+
+<span class="c-dim"># 3. Keep numbered steps — intent.user_state=locked_out needs procedure</span>
+grep -E <span class="c-green">"^[0-9]+\.|&lt;ol&gt;|&lt;li&gt;|&lt;/ol&gt;"</span>
+
+<span class="c-dim"># 4. Keep code blocks — intent.secondary includes recovery_codes (monospace)</span>
+grep -B1 -A1 <span class="c-green">'&lt;code&gt;\|&lt;pre&gt;\|class="code-block"'</span>
+
+<span class="c-dim"># 5. Keep warnings — urgency=high means critical info must survive</span>
+grep -B1 -A3 <span class="c-green">'class="note warning"\|class="callout"'</span>
+
+<span class="c-dim"># 6. Suppress intent.exclude zones — they don't exist in output</span>
+grep -v <span class="c-red">'class="getting-started\|class="api-ref\|class="pricing'</span>
+
+<span class="c-dim"># Compare to SAAS_DOCS + intent=[api_reference]:</span>
+<span class="c-dim">#   keeps endpoints, parameters, code examples</span>
+<span class="c-dim">#   strips support content, recovery sections, warnings</span>
+<span class="c-dim"># Same topology class. Same page. Completely different recipe.</span></pre>
+    </div>
+  </div>
+
+  <!-- STEP 5 -->
+  <div style="margin:32px 0">
+    <div style="font-size:9px;letter-spacing:3px;color:var(--amber);text-transform:uppercase;margin-bottom:16px">Step 5 — Signal Kernel Runs the Recipe</div>
+
+    <div class="two-col">
+      <div class="col-box">
+        <div class="col-box-title" style="color:var(--red)">Input to Signal Kernel</div>
+        <ul>
+          <li>Raw Twilio help page</li>
+          <li><strong>1,621,723 bytes</strong> — 1.6MB</li>
+          <li>Contains: API docs, getting started, pricing links, navigation, footer, cookie banner, related articles, support chat widget, marketing copy</li>
+          <li>Generic SAAS_DOCS recipe would output ~1.5KB keeping broad content</li>
+        </ul>
+      </div>
+      <div class="col-box">
+        <div class="col-box-title" style="color:var(--green)">Output After Intent-Conditioned Recipe</div>
+        <ul>
+          <li><strong>~800 bytes</strong> — exactly the answer</li>
+          <li>Recovery steps 1-5 with exact URLs</li>
+          <li>Recovery code format (monospace preserved)</li>
+          <li>One-time use warning (urgency=high kept this)</li>
+          <li>Support contact if codes exhausted</li>
+          <li>Nothing else. Not a byte of noise.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="codeblock" data-label="WHAT HAIKU RECEIVES — 800 BYTES">
+      <pre><span class="c-green">How to recover your Authy account using backup codes:</span>
+
+<span class="c-gold">1.</span> Go to authy.com/reset
+<span class="c-gold">2.</span> Enter your registered phone number
+<span class="c-gold">3.</span> Select <span class="c-green">"Use backup code"</span>
+<span class="c-gold">4.</span> Enter one of your 10-digit recovery codes:
+   <span class="c-teal">XXXX-XXXX-XX</span>
+<span class="c-gold">5.</span> You will be prompted to set a new password
+
+<span class="c-red">⚠ Warning: Each recovery code can only be used once.
+If you have used all your codes, contact support at
+help.twilio.com/hc/en-us/requests/new</span>
+
+<span class="c-dim"># Haiku receives this.</span>
+<span class="c-dim"># Not the 1.6MB page.</span>
+<span class="c-dim"># Not the API reference.</span>
+<span class="c-dim"># Not the getting started guide.</span>
+<span class="c-dim"># The answer.</span></pre>
+    </div>
+  </div>
+
+  <!-- THE BIG PICTURE -->
+  <div class="mft-box" style="border-color:var(--teal)">
+    <div class="mft-title" style="color:var(--teal)">Three Recipes. Same Page. Same Topology Class.</div>
+    <span class="mft-eq" style="color:var(--teal)">Intent vector is the variable. The recipe is the function. The output is the answer, not the page.</span>
+
+    <div class="mft-grid">
+      <div class="mft-cell">
+        <span class="mft-cell-label" style="color:var(--amber)">intent = [account_recovery]</span>
+        <div class="mft-cell-val">
+          Recovery steps + code format + warnings<br><br>
+          <strong>~800 bytes</strong><br>
+          Numbered procedure preserved<br>
+          API reference suppressed<br>
+          Getting started suppressed
+        </div>
+      </div>
+      <div class="mft-cell">
+        <span class="mft-cell-label" style="color:var(--purple)">intent = [api_reference]</span>
+        <div class="mft-cell-val">
+          Endpoints + parameters + code examples + response schemas<br><br>
+          <strong>~2.1KB</strong><br>
+          Technical depth preserved<br>
+          Support content suppressed<br>
+          Recovery sections suppressed
+        </div>
+      </div>
+      <div class="mft-cell">
+        <span class="mft-cell-label" style="color:var(--green)">intent = [pricing, plans]</span>
+        <div class="mft-cell-val">
+          Pricing tables + tier comparisons + included features<br><br>
+          <strong>~600 bytes</strong><br>
+          Cost structure preserved<br>
+          Technical docs suppressed<br>
+          Support content suppressed
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WHERE TO IMPLEMENT -->
+  <div class="codeblock" data-label="WHERE THIS LIVES IN THE BUILD">
+    <pre><span class="c-dim"># What already supports intent-conditioned extraction:</span>
+
+wlm_tokenizer.py      <span class="c-green">✅ DONE</span>   <span class="c-dim"># tokens 4096-8191 = intent signal tokens</span>
+                                  <span class="c-dim"># 256-dim vector quantized to 2 bits/dim</span>
+                                  <span class="c-dim"># INTENT_QUANT_THRESHOLDS = (-0.5, 0.0, 0.5)</span>
+
+latent_model.py       <span class="c-green">✅ DONE</span>   <span class="c-dim"># intent_vector projected onto hidden state</span>
+                                  <span class="c-dim"># h = h + self.intent_projection(intent_vector)</span>
+                                  <span class="c-dim"># already in MambaRouter.readout()</span>
+
+<span class="c-dim"># What needs intent-conditioned extraction wired in:</span>
+
+latent_parser.py      <span class="c-amber">NEXT</span>     <span class="c-dim"># ZoneMap zone weighting by intent_vector</span>
+                                  <span class="c-dim"># intent.exclude → weight 0.0 on those zones</span>
+                                  <span class="c-dim"># intent.primary → boost weights on matching zones</span>
+                                  <span class="c-dim"># BUILD THIS TOMORROW — wire in from day one</span>
+
+topology/parser.py    <span class="c-orange">PENDING</span>  <span class="c-dim"># recipe compiler receives ZoneMap + intent_vector</span>
+                                  <span class="c-dim"># compiles intent-conditioned recipe variant</span>
+                                  <span class="c-dim"># same topology class → different recipe per intent</span>
+                                  <span class="c-dim"># BUILD AFTER latent_parser.py</span>
+
+<span class="c-dim"># The pipeline contract once fully wired:</span>
+natural_language_query
+    → intent_vector[256]           <span class="c-dim"># axiom/graph — structured not string</span>
+    → WLM shifts MFT toward intent <span class="c-dim"># latent_model.py</span>
+    → WLP weights ZoneMap by intent <span class="c-dim"># latent_parser.py</span>
+    → recipe compiles for intent   <span class="c-dim"># topology/parser.py</span>
+    → signal kernel extracts intent <span class="c-dim"># signal_kernel/</span>
+    → LLM receives the answer      <span class="c-dim"># not the page — the answer</span></pre>
+  </div>
+
+  <div class="invariant" style="border-color:var(--teal)">
+    <span class="invariant-title" style="color:var(--teal)">Why This Has No Equivalent Anywhere</span>
+    <ol>
+      <li><strong>Google retrieves the map and hands it to you.</strong> AXIOM reads the map and hands you the destination. The system's job ends at the answer, not the page.</li>
+      <li><strong>RAG chunks are intent-blind.</strong> The same chunk is retrieved whether you need the recovery codes section or the API rate limits section. AXIOM produces different output for different intent from the same page.</li>
+      <li><strong>Exclusion is a first-class concept.</strong> URL query strings have no structured exclusion. AXIOM's intent vector has an exclude field that actively suppresses zones at recipe compilation time — not at generation time, not by the LLM, at the extraction layer.</li>
+      <li><strong>The vector is not a better query string.</strong> It is a completely different representation — 256 floats encoding primary intent, secondary signals, explicit exclusions, urgency, and user state simultaneously. Every pipeline component receives this structure, not a string approximation of it.</li>
+      <li><strong>The LLM receives the answer, not the page.</strong> 800 bytes instead of 1.6MB. Not because of compression — because the recipe knew what to keep before the bytes arrived. Precision extraction upstream eliminates semantic filtering downstream.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-left"><em>AX</em>IOM</div>
+  <div class="footer-right">
+    TAG not RAG // Weights as Index // Loop Never Terminates<br>
+    v1.0 // UNIFIED SPECIFICATION // AXIOM INTERNAL // DO NOT SURFACE<br>
+    signal_kernel 350 tests ✅ // crawler_bus 171 tests ✅ // store_watchdog 114 tests ✅
+  </div>
+</footer>
+
+</div>
+</body>
+</html>

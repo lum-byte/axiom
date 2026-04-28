@@ -1,0 +1,53 @@
+# =============================================================================
+# docker-compose.yml — signal_kernel
+# =============================================================================
+# Execution container for TAG's grep/sed/awk pipeline (Process 1) and
+# mft checkpoint daemon (Process 2). See readme-kerneldev.md for full
+# architectural context.
+#
+# Security model: network_mode: none is the entire boundary.
+# The container receives HTML via stdin and returns clean signal via stdout.
+# It has no path to the network. This is permanent and non-negotiable.
+#
+# Volume layout:
+#   ./recipes/active/run.sh  →  /recipe/run.sh       (ro)  recipe in, nothing out
+#   ./checkpoints            →  /store/checkpoints   (rw)  crond archives land here;
+#                                                           checkpoint_monitor.py reads
+#                                                           ./checkpoints on the host
+#
+# Container lifecycle is owned entirely by pipeline.py.
+# Docker must not restart autonomously — doing so would corrupt pipeline.py's
+# warm-container state and spawn tracking.
+#
+# AXIOM INTERNAL // DO NOT SURFACE
+# =============================================================================
+
+services:
+  signal_kernel:
+    build: .
+    container_name: axiom_signal_kernel
+    network_mode: none
+    stdin_open: true
+    restart: "no"
+
+    volumes:
+      - type: bind
+        source: ./recipes/active/run.sh
+        target: /recipe/run.sh
+        read_only: true
+      - type: bind
+        source: ./checkpoints
+        target: /store/checkpoints
+        read_only: false
+
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128m
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

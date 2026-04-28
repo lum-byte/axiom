@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="signal_kernel — complete API reference for pipeline.py, contracts.py, and the grep extraction engine">
+  <title>signal_kernel API Reference — AXIOM Internal Docs</title>
+
+  <!-- Analytics and tracking — must NOT appear in output -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXX');
+  </script>
+
+  <!-- Docs CSS — must NOT appear in output -->
+  <style>
+    :root {
+      --sidebar-width: 280px;
+      --content-max: 860px;
+      --color-signal: #0f6cbd;
+      --color-noise: #8b949e;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .sidebar { width: var(--sidebar-width); position: fixed; overflow-y: auto; }
+    pre { background: #0d1117; border-radius: 6px; padding: 16px; }
+    code { font-family: "JetBrains Mono", "Fira Code", monospace; font-size: 0.875em; }
+    .noise-class { display: none; }
+  </style>
+
+  <link rel="canonical" href="https://docs.axiom.internal/signal-kernel/api">
+  <link rel="stylesheet" href="/assets/docs.css">
+</head>
+<body class="docs-layout">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       TOP NAVIGATION — noise zone, must NOT appear in output
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <header class="docs-topbar" role="banner">
+    <nav class="topbar-nav" aria-label="Primary navigation">
+      <a href="/" class="logo-link">
+        <img src="/assets/logo.svg" alt="AXIOM" width="120" height="32">
+      </a>
+      <ul class="nav-primary">
+        <li><a href="/docs">Documentation</a></li>
+        <li><a href="/api">API Reference</a></li>
+        <li><a href="/changelog">Changelog</a></li>
+        <li><a href="/status">Status</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="search-trigger" aria-label="Search docs">⌘K</button>
+        <a href="https://github.com/axiom-internal/signal-kernel" class="github-link">GitHub</a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       LEFT SIDEBAR — noise zone (has class="sidebar toc"), must NOT appear
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <aside class="sidebar toc" role="complementary" aria-label="Documentation navigation">
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">
+        <h3 class="sidebar-heading">Getting Started</h3>
+        <ul class="menu-list">
+          <li><a href="/docs/overview">Overview</a></li>
+          <li><a href="/docs/quickstart">Quickstart</a></li>
+          <li><a href="/docs/install">Installation</a></li>
+          <li><a href="/docs/concepts">Core Concepts</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <h3 class="sidebar-heading">signal_kernel</h3>
+        <ul class="menu-list">
+          <li class="active"><a href="/docs/kernel/api">API Reference</a></li>
+          <li><a href="/docs/kernel/contracts">contracts.py</a></li>
+          <li><a href="/docs/kernel/exceptions">exceptions.py</a></li>
+          <li><a href="/docs/kernel/recipes">Recipes</a></li>
+          <li><a href="/docs/kernel/topology">Topology Classes</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <h3 class="sidebar-heading">TAG System</h3>
+        <ul class="menu-list">
+          <li><a href="/docs/tag/overview">TAG Overview</a></li>
+          <li><a href="/docs/tag/phases">Learning Phases</a></li>
+          <li><a href="/docs/tag/checkpoint">Checkpoint Daemon</a></li>
+          <li><a href="/docs/tag/witness">Witness Observability</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <h3 class="sidebar-heading">Operations</h3>
+        <ul class="menu-list">
+          <li><a href="/docs/ops/deployment">Deployment</a></li>
+          <li><a href="/docs/ops/monitoring">Monitoring</a></li>
+          <li><a href="/docs/ops/troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       MAIN CONTENT — signal zone, everything here MUST appear in output
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <main class="docs-content" role="main" id="main-content">
+
+    <!-- Breadcrumb — inside main, prose signal -->
+    <nav class="breadcrumb page-nav" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="/docs">Docs</a></li>
+        <li><a href="/docs/kernel">signal_kernel</a></li>
+        <li aria-current="page">API Reference</li>
+      </ol>
+    </nav>
+
+    <h1 id="api-reference">signal_kernel — API Reference</h1>
+
+    <p class="doc-lead">
+      Complete reference for <code>pipeline.py</code>, the public entry point
+      into the grep extraction engine. This page covers every function signature,
+      every contract type accepted and returned, and the exact failure modes you
+      must handle as a caller.
+    </p>
+
+    <!-- Inline comment that should be erased — must NOT appear in output -->
+    <!-- TODO: add latency percentile table once Witness data is collected -->
+
+    <div class="callout callout-info">
+      <strong>Version:</strong> This reference covers signal_kernel v0.4.x.
+      The v0.3.x pipeline interface is deprecated and will be removed in v0.5.0.
+      See the <a href="/changelog">changelog</a> for migration details.
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Overview
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="overview">
+      <h2>Overview</h2>
+
+      <p>
+        <code>pipeline.py</code> manages the full lifecycle of one grep extraction run.
+        It is stateless between invocations — every call receives a fresh
+        <code>KernelInput</code> and returns a <code>KernelOutput</code>.
+        No shared mutable state exists between concurrent pipeline executions.
+      </p>
+
+      <p>
+        The pipeline does three things in sequence:
+      </p>
+
+      <ol>
+        <li>Validates the recipe via <code>validator.py</code> and constructs a
+            <code>RecipeMount</code> — the proof that the recipe is safe to execute.</li>
+        <li>Spawns an Alpine container subprocess, writes <code>raw_content</code>
+            to stdin, and collects stdout as <code>clean_signal</code>.</li>
+        <li>Builds <code>KernelOutput</code>, emits <code>PipelineTelemetry</code>
+            to Witness, and fires a <code>FeedbackEvent</code> to
+            <code>feedback.py</code>.</li>
+      </ol>
+
+      <p>
+        Steps 2 and 3 are wrapped in a timeout. If the subprocess exceeds
+        <code>DEFAULT_SUBPROCESS_TIMEOUT_MS</code> (5000ms), the pipeline kills
+        it, constructs an empty <code>KernelOutput</code> via
+        <code>make_empty_kernel_output()</code>, and returns gracefully.
+        The AXIOM graph continues. Kernel timeout is never a hard stop.
+      </p>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Installation
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="installation">
+      <h2>Installation</h2>
+
+      <p>
+        signal_kernel requires Python 3.11+ and Docker (for the Alpine subprocess).
+        Install into an isolated virtualenv.
+      </p>
+
+      <pre><code class="language-bash">python3 -m venv .venv
+source .venv/bin/activate
+pip install signal-kernel==0.4.2 --break-system-packages</code></pre>
+
+      <p>
+        Verify the installation by running the built-in smoke test. This test
+        spawns a real Alpine container and runs <code>news_article.sh</code>
+        against a fixture page. If Docker is not running, the smoke test fails
+        with <code>ContainerSpawnError</code>.
+      </p>
+
+      <pre><code class="language-bash">python3 -m signal_kernel.smoke_test
+# Expected output:
+# [PASS] KernelInput construction
+# [PASS] RecipeMount: news_article.sh (sha256 verified)
+# [PASS] Pipeline execution: 487 bytes, 70.2% reduction, 312ms
+# [PASS] FeedbackEvent emitted
+# [PASS] PipelineTelemetry emitted to Witness</code></pre>
+
+      <!-- Multi-line comment inside main — should be erased, not surfaced -->
+      <!--
+        NOTE FOR REVIEWERS: the smoke test Docker image is pinned to
+        alpine:3.19.1@sha256:... in Dockerfile.smoke. Do not upgrade
+        without re-running the full test suite. grep behavior differs
+        between Alpine versions on edge cases with --color=never flag.
+      -->
+
+      <p>
+        If you see <code>RecipeManifestCorruption</code> during the smoke test,
+        the hardcoded recipe manifest was not included in the package.
+        Reinstall from the internal registry, not from PyPI.
+      </p>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Quick Start
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="quickstart">
+      <h2>Quick Start</h2>
+
+      <p>
+        The minimal invocation: construct a <code>KernelInput</code>, call
+        <code>pipeline.run()</code>, check <code>extraction_empty</code>.
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.contracts import (
+    KernelInput,
+    KernelOutput,
+    new_run_id,
+    TopologyClassStr,
+)
+from signal_kernel import pipeline
+
+# Build the input contract
+kernel_input = KernelInput(
+    raw_content=html_string,          # UTF-8 HTML, max 4MB
+    topology_class=TopologyClassStr("NEWS_ARTICLE"),
+    intent_vector_hash=intent_hash,   # SHA-256 hex digest
+    content_type="html",
+    source_url="https://example.com/article",
+    run_id=new_run_id(),              # always use new_run_id()
+)
+
+# Execute the pipeline
+result: KernelOutput = pipeline.run(kernel_input)
+
+# Check the result
+if result.extraction_empty:
+    # Not always an error — could be paywall, JS-only page, etc.
+    # feedback.py tracks the rolling empty rate for this topology class
+    handle_empty_extraction(result)
+else:
+    send_to_llm(result.clean_signal)
+    print(f"Reduction: {result.token_reduction_pct:.1%}")
+    print(f"Signal density: {result.signal_density:.3f}")</code></pre>
+
+      <p>
+        <code>pipeline.run()</code> never raises for extraction failures.
+        The only exceptions that propagate to the caller are
+        <code>RecipeMountError</code> and <code>RecipeInjectionAttempt</code>
+        — both require human review and cannot be retried automatically.
+      </p>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: pipeline.run()
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="pipeline-run">
+      <h2><code>pipeline.run(input: KernelInput) → KernelOutput</code></h2>
+
+      <p>
+        The single public function in <code>pipeline.py</code>. Executes one
+        complete extraction cycle: recipe validation → subprocess spawn →
+        content extraction → telemetry emission.
+      </p>
+
+      <h3>Parameters</h3>
+
+      <table class="api-table">
+        <thead>
+          <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>input</code></td>
+            <td><code>KernelInput</code></td>
+            <td>
+              The fully validated input contract. Constructing
+              <code>KernelInput</code> validates all fields — a
+              <code>KernelInput</code> that exists has already passed
+              its invariants.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Returns</h3>
+
+      <p>
+        A <code>KernelOutput</code> in one of two states:
+      </p>
+
+      <ul>
+        <li>
+          <strong>Successful extraction:</strong>
+          <code>extraction_empty=False</code>, <code>clean_signal</code> contains
+          the extracted text, <code>clean_byte_count &gt; 0</code>.
+        </li>
+        <li>
+          <strong>Empty extraction:</strong>
+          <code>extraction_empty=True</code>, <code>clean_signal=""</code>,
+          <code>clean_byte_count=0</code>. Constructed via
+          <code>make_empty_kernel_output()</code>. Returned on timeout,
+          spawn failure, zero-byte output, or stdin encoding error.
+        </li>
+      </ul>
+
+      <h3>Exceptions raised to caller</h3>
+
+      <p>
+        Only two exceptions propagate past <code>pipeline.run()</code>. All others
+        are caught internally and result in an empty <code>KernelOutput</code>.
+      </p>
+
+      <table class="api-table">
+        <thead>
+          <tr>
+            <th>Exception</th>
+            <th>When</th>
+            <th>Action required</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>RecipeMountError</code></td>
+            <td>
+              Recipe file missing, hash mismatch, injection detected,
+              structural validation failed, or dry-run failure.
+            </td>
+            <td>
+              Hard stop. Do not retry. The recipe for this topology class
+              is unavailable. Fall back to <code>GENERIC_HTML</code> if
+              available. File an alert.
+            </td>
+          </tr>
+          <tr>
+            <td><code>RecipeInjectionAttempt</code></td>
+            <td>
+              <code>validator.py</code> detected a shell injection pattern
+              in a compiler-generated recipe.
+            </td>
+            <td>
+              Hard stop. Do not retry under any circumstances.
+              Examine the <code>InjectionAuditRecord</code> in the Witness
+              stream. Requires forensic review of the recipe compiler output.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: KernelInput
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="kernel-input">
+      <h2>KernelInput</h2>
+
+      <p>
+        Everything the kernel needs to execute a single extraction.
+        Frozen dataclass — immutable after construction.
+        Construction validates all fields immediately. A <code>KernelInput</code>
+        that exists has already passed every invariant check.
+      </p>
+
+      <pre><code class="language-python">@dataclass(frozen=True)
+class KernelInput:
+    raw_content:        str             # UTF-8 HTML or JSON, max 4MB
+    topology_class:     TopologyClassStr  # matches [A-Z][A-Z0-9_]{1,63}
+    intent_vector_hash: IntentVectorHash  # SHA-256 hex digest, 64 chars
+    content_type:       ContentType     # "html" | "json"
+    source_url:         SourceURL       # must begin with http:// or https://
+    run_id:             RunID           # canonical UUID4, use new_run_id()
+    received_at:        datetime        # auto-set to UTC now</code></pre>
+
+      <h3>Validation rules</h3>
+
+      <ul>
+        <li>
+          <code>raw_content</code> must be non-empty and ≤
+          <code>MAX_RAW_CONTENT_BYTES</code> (4&nbsp;194&nbsp;304 bytes) when
+          UTF-8 encoded. Pages exceeding this limit indicate a fetcher
+          misconfiguration upstream — the kernel should not receive them.
+        </li>
+        <li>
+          <code>topology_class</code> must match
+          <code>[A-Z][A-Z0-9_]{1,63}</code>. This is enforced by a compiled
+          regex. Lowercase or hyphenated class names are rejected.
+        </li>
+        <li>
+          <code>intent_vector_hash</code> must be a 64-character lowercase
+          hexadecimal SHA-256 digest. Mixed-case or truncated hashes are
+          rejected with a descriptive error naming the field.
+        </li>
+        <li>
+          <code>run_id</code> must be generated via <code>new_run_id()</code>.
+          Never construct run IDs manually. UUID4 guarantees cryptographic
+          randomness — sequential IDs compromise audit trail integrity.
+        </li>
+      </ul>
+
+      <h3>Properties</h3>
+
+      <pre><code class="language-python">input.raw_byte_count     # int: UTF-8 encoded byte count of raw_content
+input.is_html            # bool: content_type == "html"
+input.is_json            # bool: content_type == "json"
+input.is_known_topology  # bool: topology_class in KNOWN_TOPOLOGY_CLASSES
+input.is_hardcoded_topology  # bool: hardcoded recipe exists for class</code></pre>
+
+      <h3>Construction errors</h3>
+
+      <p>
+        <code>KernelInput.__post_init__</code> raises <code>ValueError</code> for
+        any constraint violation. <code>pipeline.py</code> wraps these into typed
+        subclasses of <code>KernelInputError</code> with execution context attached.
+      </p>
+
+      <pre><code class="language-python"># This raises ValueError: "raw_content must not be empty"
+bad_input = KernelInput(
+    raw_content="",
+    topology_class=TopologyClassStr("NEWS_ARTICLE"),
+    intent_vector_hash="a" * 64,
+    content_type="html",
+    source_url="https://example.com",
+    run_id=new_run_id(),
+)
+
+# This raises ValueError: topology_class format invalid
+bad_input = KernelInput(
+    raw_content="<html>content</html>",
+    topology_class=TopologyClassStr("news-article"),  # hyphens not allowed
+    intent_vector_hash="a" * 64,
+    content_type="html",
+    source_url="https://example.com",
+    run_id=new_run_id(),
+)</code></pre>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: KernelOutput
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="kernel-output">
+      <h2>KernelOutput</h2>
+
+      <p>
+        The result of one grep pipeline execution. Frozen dataclass.
+        <code>extraction_empty=True</code> is a valid, non-error state —
+        it means the page had no signal in the expected structural zone,
+        not that the kernel failed.
+      </p>
+
+      <pre><code class="language-python">@dataclass(frozen=True)
+class KernelOutput:
+    clean_signal:         str             # extracted text (empty if extraction_empty)
+    raw_byte_count:       int             # bytes of raw_content
+    clean_byte_count:     int             # bytes of clean_signal
+    token_delta_estimate: int             # estimated tokens removed (chars/4)
+    recipe_used:          str             # path of the recipe that ran
+    topology_class:       TopologyClassStr
+    extraction_empty:     bool            # True if grep produced zero bytes
+    latency_ms:           float           # wall-clock time for the full run
+    run_id:               RunID
+    produced_at:          datetime        # auto-set to UTC now</code></pre>
+
+      <h3>Properties</h3>
+
+      <pre><code class="language-python">output.compression_ratio      # float: clean_bytes / raw_bytes
+output.token_reduction_pct    # float: 1.0 - compression_ratio
+output.signal_density         # float: non-whitespace chars / total chars
+output.is_under_stripping     # bool: token_reduction_pct < 0.40
+output.is_over_stripping      # bool: token_reduction_pct > 0.95
+output.is_in_target_range     # bool: 0.60 <= token_reduction_pct <= 0.80</code></pre>
+
+      <p>
+        <code>is_in_target_range</code> is the production quality indicator.
+        A recipe performing in the 60–80% token reduction range is operating
+        correctly. Below 40% indicates under-stripping (recipe not aggressive
+        enough). Above 95% indicates over-stripping (recipe discarding signal
+        content).
+      </p>
+
+      <h3>Consuming the output</h3>
+
+      <pre><code class="language-python">result = pipeline.run(kernel_input)
+
+# Always check extraction_empty first
+if not result.extraction_empty:
+    print(result.clean_signal)
+    print(f"Token reduction: {result.token_reduction_pct:.1%}")
+    print(f"Signal density:  {result.signal_density:.3f}")
+    print(f"In target range: {result.is_in_target_range}")
+    print(f"Latency:         {result.latency_ms:.0f}ms")
+else:
+    # Pass to feedback.py for quality tracking — empty is valid signal
+    quality = make_quality_from_output(result)
+    print(f"Empty extraction. Quality score: {quality.composite_score:.4f}")</code></pre>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Contracts reference (condensed)
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="contracts">
+      <h2>Contracts Reference</h2>
+
+      <p>
+        All boundary types are frozen dataclasses defined in
+        <code>contracts.py</code>. Import them directly from there —
+        never from <code>pipeline.py</code>.
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.contracts import (
+    # Core boundary contracts
+    KernelInput,
+    KernelOutput,
+    RecipeMount,
+    ExtractionQuality,
+
+    # Pipeline internals
+    ContainerLifecycle,
+    PipelineTelemetry,
+
+    # Recipe system
+    RecipeValidationResult,
+    HardcodedRecipeManifestEntry,
+    RecipeRegistryEntry,
+
+    # Feedback loop
+    FeedbackEvent,
+    QualityWindowEntry,
+    RecipeQualityAggregate,
+
+    # Checkpoint system
+    CheckpointRecord,
+    CheckpointHealth,
+    RestoreAttempt,
+
+    # Audit trail
+    InjectionAuditRecord,
+    KernelAuditEvent,
+
+    # Interface layer
+    TraversalConfig,
+    DaemonQuery,
+    DaemonResponse,
+
+    # Factory helpers — always use these, never inline
+    new_run_id,
+    compute_recipe_hash,
+    make_empty_kernel_output,
+    make_quality_from_output,
+    make_pipeline_telemetry,
+
+    # Type aliases
+    TopologyClassStr,
+    RecipeHash,
+    RunID,
+    IntentVectorHash,
+    SourceURL,
+)</code></pre>
+
+      <p>
+        The dependency direction is strict:
+        <strong>everything imports from <code>contracts.py</code> — <code>contracts.py</code>
+        imports nothing from the kernel.</strong>
+        If you find an import from <code>pipeline.py</code> or <code>feedback.py</code>
+        inside <code>contracts.py</code>, that is a dependency inversion and must be
+        corrected before merging.
+      </p>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Topology Classes
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="topology-classes">
+      <h2>Topology Classes</h2>
+
+      <p>
+        A topology class is a string identifier that maps a page to its structural
+        template and the recipe that extracts signal from it.
+        The five hardcoded topology classes have hand-written, hash-verified
+        recipes that are immutable at runtime.
+      </p>
+
+      <table class="api-table">
+        <thead>
+          <tr>
+            <th>Class</th>
+            <th>Recipe</th>
+            <th>Signal zone</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>NEWS_ARTICLE</code></td>
+            <td><code>news_article.sh</code></td>
+            <td><code>&lt;article&gt;</code></td>
+            <td>Hardcoded. Strips nav, aside, footer, script, style.</td>
+          </tr>
+          <tr>
+            <td><code>SAAS_DOCS</code></td>
+            <td><code>saas_docs.sh</code></td>
+            <td><code>&lt;main&gt;</code></td>
+            <td>Hardcoded. Preserves code block indentation.</td>
+          </tr>
+          <tr>
+            <td><code>REST_API_JSON</code></td>
+            <td><code>rest_api_json.sh</code></td>
+            <td>data/results envelope</td>
+            <td>Hardcoded. Depth-aware JSON key filtering.</td>
+          </tr>
+          <tr>
+            <td><code>JSON_LD_STRUCTURED</code></td>
+            <td><code>json_ld.sh</code></td>
+            <td><code>&lt;head&gt;</code> script blocks</td>
+            <td>Hardcoded. Head-only extraction, body LD+JSON discarded.</td>
+          </tr>
+          <tr>
+            <td><code>ECOMMERCE_PRODUCT</code></td>
+            <td><code>ecommerce.sh</code></td>
+            <td>data-product attributes</td>
+            <td>Hardcoded. Attribute-level noise erasure.</td>
+          </tr>
+          <tr>
+            <td><code>NEWS_ARTICLE_PAYWALLED</code></td>
+            <td>→ <code>NEWS_ARTICLE</code></td>
+            <td><code>&lt;article&gt;</code></td>
+            <td>
+              Not hardcoded. Falls back to NEWS_ARTICLE via
+              <code>PARENT_CLASS_MAP</code>. Expected empty extraction rate
+              is higher — paywall login walls produce zero signal.
+            </td>
+          </tr>
+          <tr>
+            <td><code>GENERIC_HTML</code></td>
+            <td><code>generic.sh</code></td>
+            <td><code>&lt;body&gt;</code></td>
+            <td>
+              Compiler-generated fallback. Used when no specific recipe
+              exists for the detected topology class. Lower signal density
+              expected — body extraction is undiscriminating.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Quality Thresholds
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="quality-thresholds">
+      <h2>Quality Thresholds</h2>
+
+      <p>
+        All thresholds are defined as constants in <code>contracts.py</code>.
+        <code>feedback.py</code> and <code>topology_parser.py</code> import them
+        from there — they are never duplicated.
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.contracts import (
+    SIGNAL_DENSITY_FLOOR,           # 0.35 — below: over-stripping or no signal
+    SIGNAL_DENSITY_CEILING,         # 0.95 — above: likely retaining markup
+    MIN_MEANINGFUL_TOKEN_REDUCTION, # 0.40 — below: recipe under-stripping
+    MAX_MEANINGFUL_TOKEN_REDUCTION, # 0.95 — above: recipe over-stripping
+    EMPTY_EXTRACTION_RATE_THRESHOLD, # 0.25 — triggers recompilation recommendation
+    QUALITY_WINDOW_SIZE,            # 100  — rolling window samples per topology class
+)</code></pre>
+
+      <p>
+        The <strong>production target range</strong> is 60–80% token reduction.
+        Recipes consistently outside this range are flagged for recompilation
+        via <code>FeedbackEvent.recompilation_recommended=True</code>. The
+        <code>topology_parser.py</code> learning loop acts on these signals —
+        <code>feedback.py</code> only signals, it does not invoke the compiler.
+      </p>
+
+      <h3>ExtractionQuality composite score</h3>
+
+      <p>
+        <code>ExtractionQuality.composite_score</code> is a human-readable
+        quality metric in <code>[0.0, 1.0]</code>. It is computed from
+        <code>signal_density</code> and <code>token_reduction_pct</code>:
+      </p>
+
+      <pre><code class="language-python">@property
+def composite_score(self) -> float:
+    if self.empty_extraction:
+        return 0.0
+    density_score = min(self.signal_density / SIGNAL_DENSITY_FLOOR, 1.0)
+    r = self.token_reduction_pct
+    if r < MIN_MEANINGFUL_TOKEN_REDUCTION:
+        reduction_score = r / MIN_MEANINGFUL_TOKEN_REDUCTION
+    elif r > MAX_MEANINGFUL_TOKEN_REDUCTION:
+        over = r - MAX_MEANINGFUL_TOKEN_REDUCTION
+        reduction_score = max(0.0, 1.0 - over * 10.0)
+    else:
+        reduction_score = 1.0
+    return round((density_score + reduction_score) / 2.0, 4)</code></pre>
+
+      <p>
+        This is a <em>diagnostic</em> metric, not a training loss.
+        <code>topology_parser.py</code> uses <code>token_reduction_pct</code>
+        and <code>signal_density</code> directly for its decisions — it does
+        not use <code>composite_score</code>.
+      </p>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Exception Handling
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="exception-handling">
+      <h2>Exception Handling</h2>
+
+      <p>
+        All kernel exceptions inherit from <code>KernelException</code>.
+        Every exception carries a structured <code>to_audit_dict()</code> method
+        and an <code>exception_code</code> string for log filtering.
+        The <code>is_hard_stop</code> attribute tells you whether
+        <code>pipeline.run()</code> re-raises or degrades gracefully.
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.exceptions import (
+    KernelException,
+    RecipeMountError,
+    RecipeInjectionAttempt,
+    is_hard_stop,
+    classify,
+)
+
+try:
+    result = pipeline.run(kernel_input)
+except RecipeInjectionAttempt as exc:
+    # Forensic stop — full recipe content is in the InjectionAuditRecord
+    alert_security_team(exc.to_audit_dict())
+    raise SystemExit(1)
+except RecipeMountError as exc:
+    # Hard stop — recipe unavailable for this topology class
+    logger.critical("Recipe mount failed", extra=exc.to_audit_dict())
+    result = make_empty_kernel_output(
+        run_id=kernel_input.run_id,
+        topology_class=kernel_input.topology_class,
+        recipe_used="",
+        raw_byte_count=kernel_input.raw_byte_count,
+        latency_ms=0.0,
+    )
+except KernelException as exc:
+    # Should never reach here from pipeline.run() — all other exceptions
+    # are caught internally. If this fires, it is a programming error.
+    logger.critical("Unexpected KernelException escaped pipeline.run()",
+                    extra=classify(exc))
+    raise</code></pre>
+
+      <h3>Exception codes</h3>
+
+      <p>
+        Every exception carries a stable <code>exception_code</code> string
+        for log filtering without matching on class names.
+        Use <code>EXCEPTION_REGISTRY</code> to reconstruct exception types
+        from serialized audit records.
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.exceptions import EXCEPTION_REGISTRY, exception_from_code
+
+# Look up exception class from a code string found in a log record
+exc_class = exception_from_code("KERNEL_RECIPE_INJECTION")
+# → RecipeInjectionAttempt
+
+exc_class = exception_from_code("KERNEL_OUTPUT_TIMEOUT")
+# → SubprocessTimeout</code></pre>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Checkpoint System
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="checkpoint">
+      <h2>Checkpoint System</h2>
+
+      <p>
+        The checkpoint system is Process 2 — entirely separate from the grep
+        pipeline (Process 1). <code>crond</code> fires <code>mft_checkpoint.sh</code>
+        every 15 minutes. The four store files are archived to
+        <code>/store/checkpoints/</code> as <code>.tar.gz</code>.
+        Up to 48 archives are retained (12 hours at 15-minute intervals).
+      </p>
+
+      <p>
+        An unhealthy checkpoint system does not stop Process 1. It triggers a
+        Witness alert. The extraction pipeline continues regardless of whether
+        crond is alive.
+      </p>
+
+      <h3>Store files</h3>
+
+      <pre><code class="language-python">from signal_kernel.contracts import STORE_FILE_NAMES
+# frozenset({
+#     "topology_router.pt",
+#     "recipe_registry.mmap",
+#     "phase_states.mmap",
+#     "structural_layer.pt",
+# })</code></pre>
+
+      <h3>Restore on startup</h3>
+
+      <p>
+        On TAG startup, <code>checkpoint_monitor.py</code> checks whether all
+        four store files are present and valid. If any are missing or corrupt,
+        <code>restore.sh</code> is invoked. It iterates archives newest-to-oldest,
+        verifying each with <code>tar -tzf</code> before extracting. If all
+        48 archives are corrupt, <code>CheckpointExhaustionError</code> is raised
+        and TAG cannot start.
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.exceptions import (
+    RestoreFailure,
+    CheckpointExhaustionError,
+    RestorePartialError,
+)
+
+# In TAG startup sequence:
+try:
+    checkpoint_monitor.restore_if_needed()
+except CheckpointExhaustionError as exc:
+    # All 48 archives are corrupt — 12-hour window unrecoverable
+    logger.critical("All checkpoints corrupt", extra=exc.to_audit_dict())
+    raise SystemExit("TAG cannot start: no valid checkpoint found")
+except RestorePartialError as exc:
+    # Archive found but not all 4 store files were restored
+    logger.critical("Partial restore", extra=exc.to_audit_dict())
+    raise
+except RestoreFailure as exc:
+    logger.critical("Restore failed", extra=exc.to_audit_dict())
+    raise</code></pre>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: PipelineTelemetry
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="telemetry">
+      <h2>PipelineTelemetry</h2>
+
+      <p>
+        <code>PipelineTelemetry</code> is emitted by <code>pipeline.py</code>
+        after every invocation — successful or empty. It is not optional.
+        Every field is either directly measured or deterministically derived.
+        No inference. No estimation beyond <code>token_delta_estimate</code>
+        (characters divided by 4, the standard LLM token approximation).
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.contracts import make_pipeline_telemetry
+
+# pipeline.py constructs this after every run — callers do not build it
+telemetry = make_pipeline_telemetry(
+    output=kernel_output,
+    lifecycle=container_lifecycle,
+    is_hardcoded_recipe=recipe_mount.is_hardcoded,
+)
+
+# Emit to Witness as a structured log record
+logger.info("pipeline.telemetry", extra=telemetry.to_log_dict())</code></pre>
+
+      <h3>to_log_dict() output</h3>
+
+      <pre><code class="language-python">{
+    "run_id":               "550e8400-e29b-41d4-a716-446655440000",
+    "topology_class":       "NEWS_ARTICLE",
+    "recipe_hash_prefix":   "65486dd3",
+    "is_hardcoded_recipe":  True,
+    "raw_byte_count":       48291,
+    "clean_byte_count":     14486,
+    "token_delta_estimate": 8451,
+    "signal_density":       0.7823,
+    "extraction_empty":     False,
+    "spawn_latency_ms":     124.3,
+    "total_latency_ms":     312.7,
+    "timed_out":            False,
+    "stderr_non_empty":     False,
+    "emitted_at":           "2026-03-05T12:00:00.000000+00:00",
+}</code></pre>
+
+      <p>
+        <code>recipe_hash_prefix</code> is the first 8 characters of the SHA-256
+        digest. The full hash is in the <code>InjectionAuditRecord</code> and
+        the <code>RecipeMount</code>. Short prefix for log lines — full hash for
+        forensic queries.
+      </p>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Daemon Interface
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="daemon-interface">
+      <h2>Daemon Interface</h2>
+
+      <p>
+        The AXIOM controller communicates with the TAG daemon via
+        <code>interface.py</code>. The controller sends a
+        <code>DaemonQuery</code> and receives a <code>DaemonResponse</code>.
+        The kernel does not exist at the graph level — the graph sees only
+        query in, <code>DaemonResponse</code> out.
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.contracts import DaemonQuery, DaemonResponse, new_run_id
+
+# AXIOM controller builds this
+query = DaemonQuery(
+    intent_vector_hash=IntentVectorHash("a" * 64),
+    target_urls=(
+        "https://example.com/article-1",
+        "https://example.com/article-2",
+    ),
+)
+
+# TAG daemon returns this
+response: DaemonResponse = interface.handle(query)
+
+# The response contains everything needed to execute the pipeline
+print(response.topology_class)        # "NEWS_ARTICLE"
+print(response.phase)                 # "knows" | "predicts" | "learns"
+print(response.is_phase_three)        # True if phase == "knows"
+print(response.highest_friction_url)  # URL predicted hardest to extract
+print(response.mft_hit)               # True if a prior run matched</code></pre>
+
+      <h3>Phases</h3>
+
+      <table class="api-table">
+        <thead>
+          <tr>
+            <th>Phase</th>
+            <th>Meaning</th>
+            <th>Recipe source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>learns</code></td>
+            <td>
+              TAG has seen this topology class fewer than 10 times.
+              Observations are being collected. No compiled policy yet.
+            </td>
+            <td>Fallback: <code>GENERIC_HTML</code></td>
+          </tr>
+          <tr>
+            <td><code>predicts</code></td>
+            <td>
+              TAG has compiled an initial recipe but is still gathering
+              quality signal. Recompilation may occur after this run.
+            </td>
+            <td>Compiler-generated recipe</td>
+          </tr>
+          <tr>
+            <td><code>knows</code></td>
+            <td>
+              TAG has a stable, high-quality recipe backed by sufficient
+              window samples. Direct policy execution.
+            </td>
+            <td>Compiler-generated or hardcoded recipe</td>
+          </tr>
+        </tbody>
+      </table>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Security Model
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="security">
+      <h2>Security Model</h2>
+
+      <p>
+        The kernel's security boundary is <code>validator.py</code>. Every
+        compiler-generated recipe passes through injection detection before
+        it may execute. The injection patterns are defined in
+        <code>contracts.py</code> as <code>INJECTION_PATTERNS</code> — a tuple
+        of 18 regex patterns that <code>validator.py</code> tests against every
+        recipe before permitting execution.
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.contracts import (
+    INJECTION_PATTERNS,        # tuple of 18 regex patterns
+    ALLOWED_RECIPE_COMMANDS,   # frozenset: grep sed awk cat cut tr head tail sort uniq
+    MAX_RECIPE_LINE_COUNT,     # int: 50
+)</code></pre>
+
+      <p>
+        <strong>Hardcoded recipes are never injection-tested</strong> — they are
+        human-authored and hash-verified. If a hardcoded recipe hash does not
+        match its manifest entry, <code>RecipeHashMismatch</code> is raised with
+        <code>is_tamper_event=True</code>. This is treated as a filesystem tamper
+        event, not a validation failure.
+      </p>
+
+      <p>
+        Injection detection fires on the compiler-generated recipe <em>before</em>
+        the recipe is written to disk. If detection fires:
+      </p>
+
+      <ol>
+        <li>
+          Capture the full recipe content in <code>InjectionAuditRecord</code>.
+          Do not truncate. The full content is required for forensic analysis of
+          how the recipe compiler produced a hostile payload.
+        </li>
+        <li>Raise <code>RecipeInjectionAttempt</code>.</li>
+        <li>Never write the recipe to disk.</li>
+        <li>Never pass it to the kernel subprocess under any circumstances.</li>
+        <li>Alert Witness immediately via <code>KernelAuditEvent</code>
+            with <code>severity="critical"</code>.</li>
+      </ol>
+
+      <p>
+        The injection vector is adversarial web pages causing the recipe compiler
+        to emit a shell injection payload. A hostile page can produce a DOM
+        structure that the compiler translates into a <code>$(command)</code>
+        or backtick execution in the generated grep pipeline. The injection
+        would execute inside the Alpine container — which has no network access
+        (<code>network_mode: none</code>) and runs as a non-root user, limiting
+        the blast radius. But the kernel's defense-in-depth does not rely on
+        container isolation — <code>validator.py</code> is the primary barrier.
+      </p>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Constants Reference
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="constants">
+      <h2>Constants Reference</h2>
+
+      <p>
+        All architectural constants are defined in <code>contracts.py</code>.
+        Never redefine them in other files. If you find a magic number in
+        <code>pipeline.py</code> or <code>feedback.py</code> that matches
+        one of these, replace it with the import.
+      </p>
+
+      <table class="api-table">
+        <thead>
+          <tr>
+            <th>Constant</th>
+            <th>Value</th>
+            <th>Used by</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>MAX_RAW_CONTENT_BYTES</code></td>
+            <td><code>4&nbsp;194&nbsp;304</code> (4MB)</td>
+            <td><code>KernelInput</code> validation</td>
+          </tr>
+          <tr>
+            <td><code>DEFAULT_SUBPROCESS_TIMEOUT_MS</code></td>
+            <td><code>5000</code></td>
+            <td><code>pipeline.py</code> subprocess lifecycle</td>
+          </tr>
+          <tr>
+            <td><code>DEFAULT_SPAWN_TIMEOUT_MS</code></td>
+            <td><code>3000</code></td>
+            <td><code>pipeline.py</code> container spawn</td>
+          </tr>
+          <tr>
+            <td><code>MAX_RECIPE_LINE_COUNT</code></td>
+            <td><code>50</code></td>
+            <td><code>validator.py</code>, <code>RecipeMount</code></td>
+          </tr>
+          <tr>
+            <td><code>CHECKPOINT_RETAIN_COUNT</code></td>
+            <td><code>48</code></td>
+            <td><code>mft_checkpoint.sh</code> rotation</td>
+          </tr>
+          <tr>
+            <td><code>CHECKPOINT_INTERVAL_MINUTES</code></td>
+            <td><code>15</code></td>
+            <td><code>crond</code> schedule</td>
+          </tr>
+          <tr>
+            <td><code>CHECKPOINT_STALE_THRESHOLD_MINUTES</code></td>
+            <td><code>20</code></td>
+            <td><code>checkpoint_monitor.py</code> health check</td>
+          </tr>
+          <tr>
+            <td><code>QUALITY_WINDOW_SIZE</code></td>
+            <td><code>100</code></td>
+            <td><code>feedback.py</code> rolling window</td>
+          </tr>
+          <tr>
+            <td><code>SIGNAL_DENSITY_FLOOR</code></td>
+            <td><code>0.35</code></td>
+            <td><code>ExtractionQuality</code>, <code>feedback.py</code></td>
+          </tr>
+          <tr>
+            <td><code>SIGNAL_DENSITY_CEILING</code></td>
+            <td><code>0.95</code></td>
+            <td><code>ExtractionQuality</code></td>
+          </tr>
+          <tr>
+            <td><code>MIN_MEANINGFUL_TOKEN_REDUCTION</code></td>
+            <td><code>0.40</code></td>
+            <td><code>ExtractionQuality</code>, <code>feedback.py</code></td>
+          </tr>
+          <tr>
+            <td><code>MAX_MEANINGFUL_TOKEN_REDUCTION</code></td>
+            <td><code>0.95</code></td>
+            <td><code>ExtractionQuality</code></td>
+          </tr>
+          <tr>
+            <td><code>EMPTY_EXTRACTION_RATE_THRESHOLD</code></td>
+            <td><code>0.25</code></td>
+            <td><code>FeedbackEvent</code>, <code>feedback.py</code></td>
+          </tr>
+          <tr>
+            <td><code>FALLBACK_TOPOLOGY_CLASS</code></td>
+            <td><code>"GENERIC_HTML"</code></td>
+            <td><code>registry.py</code> fallback chain</td>
+          </tr>
+        </tbody>
+      </table>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Migration Guide
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="migration">
+      <h2>Migrating from v0.3.x</h2>
+
+      <p>
+        The v0.4.0 release replaced the old <code>KernelRunner</code> class with
+        the stateless <code>pipeline.run()</code> function. If you are upgrading
+        from v0.3.x, three changes are required.
+      </p>
+
+      <h3>1. Replace KernelRunner with pipeline.run()</h3>
+
+      <pre><code class="language-python"># v0.3.x — deprecated
+from signal_kernel import KernelRunner
+runner = KernelRunner(topology_class="NEWS_ARTICLE")
+result = runner.extract(html, url=url)
+
+# v0.4.x — current
+from signal_kernel import pipeline
+from signal_kernel.contracts import KernelInput, new_run_id
+result = pipeline.run(KernelInput(
+    raw_content=html,
+    topology_class="NEWS_ARTICLE",
+    intent_vector_hash=compute_hash(html),
+    content_type="html",
+    source_url=url,
+    run_id=new_run_id(),
+))</code></pre>
+
+      <h3>2. Update exception handling</h3>
+
+      <pre><code class="language-python"># v0.3.x — deprecated exception names
+from signal_kernel.errors import ExtractionError, TimeoutError
+
+# v0.4.x — typed exception hierarchy
+from signal_kernel.exceptions import (
+    RecipeMountError,        # was: ExtractionError(reason="recipe")
+    SubprocessTimeout,       # was: TimeoutError
+    EmptyExtractionError,    # was: ExtractionError(reason="empty")
+    RecipeInjectionAttempt,  # new in v0.4 — no v0.3 equivalent
+)</code></pre>
+
+      <h3>3. Update quality metric access</h3>
+
+      <pre><code class="language-python"># v0.3.x — deprecated attributes
+result.reduction_pct   # renamed
+result.density         # renamed
+
+# v0.4.x — current attribute names
+result.token_reduction_pct   # was: reduction_pct
+result.signal_density        # was: density</code></pre>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         SECTION: Troubleshooting
+         ───────────────────────────────────────────────────────────────────── -->
+    <section id="troubleshooting">
+      <h2>Troubleshooting</h2>
+
+      <h3>ContainerSpawnError on every request</h3>
+
+      <p>
+        Docker daemon is not running or is under memory pressure. Check:
+      </p>
+
+      <pre><code class="language-bash">docker info
+docker stats --no-stream
+# If OOM: increase Docker memory limit in Docker Desktop → Settings → Resources</code></pre>
+
+      <h3>High empty extraction rate for NEWS_ARTICLE</h3>
+
+      <p>
+        If <code>window_empty_extraction_rate</code> in <code>FeedbackEvent</code>
+        exceeds <code>EMPTY_EXTRACTION_RATE_THRESHOLD</code> (0.25), the corpus
+        for this topology class has shifted. Common causes:
+      </p>
+
+      <ul>
+        <li>
+          Source URLs are returning login walls or paywalls —
+          check <code>source_url</code> values against known paywall domains.
+          These should be classified as <code>NEWS_ARTICLE_PAYWALLED</code>, not
+          <code>NEWS_ARTICLE</code>.
+        </li>
+        <li>
+          The article DOM has changed — a publication redesigned their template
+          and <code>&lt;article&gt;</code> is no longer the signal zone.
+          <code>topology_parser.py</code> will detect this from the quality
+          signal and recompile.
+        </li>
+        <li>
+          JavaScript-rendered content — Phantom is delivering the JS bundle
+          instead of the rendered DOM. Check <code>TraversalConfig.render_mode</code>.
+          Should be <code>"headless"</code> for JS-heavy news sites.
+        </li>
+      </ul>
+
+      <h3>RecipeHashMismatch on startup</h3>
+
+      <p>
+        A hardcoded recipe file was modified after deployment.
+        <code>is_tamper_event=True</code> on the exception means the file on disk
+        does not match the hash committed to the manifest. This is treated as a
+        security event, not a configuration error.
+      </p>
+
+      <pre><code class="language-bash"># Verify all hardcoded recipe hashes from the shell
+cd /app/recipes/hardcoded
+for f in *.sh; do
+    expected=$(grep "\"$f\"" manifest.json | grep -o '"hash":"[^"]*"' | cut -d'"' -f4)
+    actual=$(sha256sum "$f" | cut -d' ' -f1)
+    [ "$expected" = "$actual" ] && echo "OK: $f" || echo "MISMATCH: $f"
+done</code></pre>
+
+      <h3>StdinEncodingError on specific URLs</h3>
+
+      <p>
+        The page contains bytes that cannot be encoded as UTF-8. Common with
+        pages that declare <code>charset=UTF-8</code> but embed ISO-8859-1 or
+        Windows-1252 bytes in JavaScript strings or data attributes.
+      </p>
+
+      <pre><code class="language-python">from signal_kernel.exceptions import StdinEncodingError
+
+# The audit dict tells you which URL and what encoding error fired
+try:
+    result = pipeline.run(kernel_input)
+except StdinEncodingError as exc:
+    # This should not escape pipeline.run() — log as a bug if it does
+    logger.error("StdinEncodingError escaped", extra=exc.to_audit_dict())</code></pre>
+
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         RIGHT SIDEBAR — noise zone (class="sidebar-related"), must NOT appear
+         ───────────────────────────────────────────────────────────────────── -->
+    <aside class="sidebar-related" aria-label="Related documentation">
+      <h4>Related pages</h4>
+      <ul>
+        <li><a href="/docs/kernel/contracts">contracts.py reference</a></li>
+        <li><a href="/docs/kernel/exceptions">exceptions.py reference</a></li>
+        <li><a href="/docs/kernel/recipes">Hardcoded recipes</a></li>
+        <li><a href="/docs/tag/phases">TAG learning phases</a></li>
+        <li><a href="/docs/ops/monitoring">Monitoring with Witness</a></li>
+      </ul>
+      <h4>On this page</h4>
+      <nav class="page-nav">
+        <ul>
+          <li><a href="#overview">Overview</a></li>
+          <li><a href="#installation">Installation</a></li>
+          <li><a href="#quickstart">Quick Start</a></li>
+          <li><a href="#pipeline-run">pipeline.run()</a></li>
+          <li><a href="#kernel-input">KernelInput</a></li>
+          <li><a href="#kernel-output">KernelOutput</a></li>
+          <li><a href="#contracts">Contracts Reference</a></li>
+          <li><a href="#topology-classes">Topology Classes</a></li>
+          <li><a href="#quality-thresholds">Quality Thresholds</a></li>
+          <li><a href="#exception-handling">Exception Handling</a></li>
+          <li><a href="#checkpoint">Checkpoint System</a></li>
+          <li><a href="#telemetry">PipelineTelemetry</a></li>
+          <li><a href="#daemon-interface">Daemon Interface</a></li>
+          <li><a href="#security">Security Model</a></li>
+          <li><a href="#constants">Constants Reference</a></li>
+          <li><a href="#migration">Migration Guide</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+  </main><!-- end signal zone -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       FOOTER — noise zone, must NOT appear in output
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <footer class="docs-footer" role="contentinfo">
+    <div class="footer-inner">
+      <div class="footer-nav">
+        <nav aria-label="Footer navigation">
+          <ul>
+            <li><a href="/docs">Documentation</a></li>
+            <li><a href="/api">API</a></li>
+            <li><a href="/changelog">Changelog</a></li>
+            <li><a href="/status">Status</a></li>
+            <li><a href="/security">Security</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer-meta">
+        <p>
+          AXIOM Internal — Do not distribute.
+          Build: <code>v0.4.2+g7f3a91c</code>
+          Rendered: <time datetime="2026-03-05">March 5, 2026</time>
+        </p>
+      </div>
+    </div>
+    <!-- Footer analytics -->
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        trackPageView({ section: 'docs', page: 'kernel-api' });
+      });
+    </script>
+    <noscript>
+      <img src="https://analytics.axiom.internal/pixel.gif?page=kernel-api" width="1" height="1" alt="">
+    </noscript>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AXIOM — Core Searching Algorithm v0.2</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:           #09080a;
+    --surface:      #0f0d11;
+    --surface2:     #161319;
+    --border:       #2a1f35;
+    --border-bright:#3d2e50;
+    --accent:       #ffaa3b;
+    --accent2:      #ff6b35;
+    --accent3:      #ffd166;
+    --accent4:      #e07aff;
+    --accent5:      #ff9f7a;
+    --warm:         #ff8c42;
+    --text:         #d4c8c0;
+    --text-dim:     #5c5060;
+    --text-bright:  #f0e8e0;
+    --red:          #ff4455;
+    --green:        #7affaa;
+    --mono:         'Space Mono', monospace;
+    --display:      'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 0%, rgba(255,170,59,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(255,107,53,0.03) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,140,66,0.008) 2px, rgba(255,140,66,0.008) 4px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page { max-width: 1380px; margin: 0 auto; padding: 64px 48px; position: relative; z-index: 1; }
+
+  /* ── HEADER ── */
+  .header {
+    border-bottom: 1px solid var(--border-bright);
+    padding-bottom: 48px;
+    margin-bottom: 72px;
+    position: relative;
+  }
+  .header::before {
+    content: 'AXIOM // CORE SEARCHING ALGORITHM // v0.2-SPEC // INTERNAL';
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 4px;
+    display: block;
+    margin-bottom: 22px;
+  }
+  .header-glyph {
+    font-family: var(--display);
+    font-size: clamp(64px, 10vw, 110px);
+    font-weight: 800;
+    color: var(--text-bright);
+    line-height: 0.85;
+    letter-spacing: -4px;
+  }
+  .header-glyph span { color: var(--accent); }
+  .header-sub {
+    font-family: var(--display);
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-top: 14px;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .header-line {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    padding: 4px 14px;
+    border: 1px solid;
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+  }
+  .b-amber  { border-color: var(--accent);  color: var(--accent); }
+  .b-orange { border-color: var(--accent2); color: var(--accent2); }
+  .b-gold   { border-color: var(--accent3); color: var(--accent3); }
+  .b-purple { border-color: var(--accent4); color: var(--accent4); }
+  .b-warm   { border-color: var(--accent5); color: var(--accent5); }
+  .b-green  { border-color: var(--green);   color: var(--green); }
+
+  /* ── DIVIDER ── */
+  hr.div { border: none; border-top: 1px solid var(--border); margin: 64px 0; }
+  .sweep {
+    width: 100%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    margin: 28px 0; opacity: 0.25;
+    animation: sweep 5s ease-in-out infinite;
+  }
+  @keyframes sweep { 0%,100%{opacity:0.1} 50%{opacity:0.35} }
+
+  /* ── SECTION LABELS ── */
+  .sec-label {
+    font-size: 9px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .sec-title {
+    font-family: var(--display);
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 24px;
+    letter-spacing: -0.5px;
+  }
+
+  /* ── PHILOSOPHY BLOCK ── */
+  .phil {
+    background: linear-gradient(135deg, rgba(255,170,59,0.04), rgba(255,107,53,0.04));
+    border: 1px solid var(--border-bright);
+    border-left: 3px solid var(--accent);
+    padding: 30px 34px;
+    margin-bottom: 28px;
+  }
+  .phil h3 {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .phil p {
+    color: var(--text);
+    line-height: 1.9;
+    max-width: 980px;
+  }
+  .phil p + p { margin-top: 10px; }
+  .phil code {
+    font-size: 10px;
+    color: var(--accent3);
+    background: var(--surface2);
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── THE BREAKTHROUGH GRID ── */
+  .break-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    margin: 28px 0;
+  }
+  .break-col { padding: 26px 30px; }
+  .break-col + .break-col { border-left: 1px solid var(--border); }
+  .break-col-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: block;
+  }
+  .break-item {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    border-left: 2px solid;
+    line-height: 1.6;
+  }
+  .break-item.bad  { border-color: var(--red);   background: rgba(255,68,85,0.04); }
+  .break-item.good { border-color: var(--green);  background: rgba(122,255,170,0.04); }
+  .break-item strong { color: var(--text); font-weight: 400; }
+
+  /* ── THREE PHASE ── */
+  .phase-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 28px 0;
+  }
+  .phase {
+    background: var(--bg);
+    padding: 28px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .phase::before {
+    content: attr(data-n);
+    position: absolute;
+    top: -8px; right: 12px;
+    font-family: var(--display);
+    font-size: 80px;
+    font-weight: 800;
+    opacity: 0.04;
+    color: white;
+    line-height: 1;
+  }
+  .phase-num {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .phase-title {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 10px;
+    line-height: 1.2;
+  }
+  .phase-body {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.75;
+  }
+  .phase-body code {
+    font-size: 10px;
+    color: var(--accent3);
+    background: var(--surface2);
+    padding: 1px 4px;
+    border: 1px solid var(--border);
+  }
+  .phase-state {
+    margin-top: 14px;
+    font-size: 10px;
+    padding: 6px 10px;
+    border: 1px solid;
+    display: inline-block;
+    letter-spacing: 1px;
+  }
+
+  /* ── LAYER TABLE ── */
+  .layer-table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+  .layer-table th {
+    text-align: left;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+    text-transform: uppercase;
+  }
+  .layer-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    vertical-align: top;
+    line-height: 1.6;
+  }
+  .layer-table tr:hover td { background: var(--surface2); }
+  .layer-table td:first-child {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    white-space: nowrap;
+  }
+  .layer-table td code {
+    font-size: 10px;
+    color: var(--accent3);
+    background: var(--surface2);
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── LOOP DIAGRAM ── */
+  .loop-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 52px;
+    margin: 32px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .loop-container::after {
+    content: 'index_daemon.py // CLOSED LOOP // NEVER STOPS';
+    position: absolute;
+    bottom: 16px; right: 20px;
+    font-size: 9px;
+    color: var(--border-bright);
+    letter-spacing: 3px;
+  }
+  .loop-diagram {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .loop-row { display: flex; align-items: center; justify-content: center; gap: 0; width: 100%; }
+  .loop-node {
+    border: 1px solid;
+    padding: 12px 22px;
+    text-align: center;
+    min-width: 180px;
+    cursor: default;
+    transition: all 0.2s;
+  }
+  .loop-node:hover { transform: translateY(-2px); filter: brightness(1.15); }
+  .loop-node .n-id { font-size: 9px; letter-spacing: 2px; opacity: 0.6; display: block; margin-bottom: 4px; }
+  .loop-node .n-name { font-family: var(--display); font-size: 13px; font-weight: 700; }
+  .loop-node .n-sub { font-size: 9px; opacity: 0.7; display: block; margin-top: 3px; letter-spacing: 1px; }
+
+  .n-amber  { border-color: var(--accent);  color: var(--accent);  background: rgba(255,170,59,0.05); }
+  .n-orange { border-color: var(--accent2); color: var(--accent2); background: rgba(255,107,53,0.05); }
+  .n-gold   { border-color: var(--accent3); color: var(--accent3); background: rgba(255,209,102,0.05); }
+  .n-purple { border-color: var(--accent4); color: var(--accent4); background: rgba(224,122,255,0.05); }
+  .n-green  { border-color: var(--green);   color: var(--green);   background: rgba(122,255,170,0.05); }
+  .n-warm   { border-color: var(--accent5); color: var(--accent5); background: rgba(255,159,122,0.05); }
+  .n-red    { border-color: var(--red);     color: var(--red);     background: rgba(255,68,85,0.05); }
+
+  .arr-down {
+    width: 1px; height: 28px;
+    background: var(--border-bright);
+    margin: 0 auto;
+    position: relative;
+  }
+  .arr-down::after {
+    content: '▼';
+    position: absolute;
+    bottom: -10px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
+    color: var(--border-bright);
+  }
+  .arr-right {
+    width: 40px; height: 1px;
+    background: var(--border-bright);
+    position: relative; flex-shrink: 0;
+  }
+  .arr-right::after {
+    content: '▶';
+    position: absolute;
+    right: -8px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 8px;
+    color: var(--border-bright);
+  }
+  .cond-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    background: var(--bg);
+    padding: 2px 12px;
+    border: 1px solid var(--border);
+    margin: 8px 0;
+  }
+  .split-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 64px;
+    width: 100%;
+    margin: 16px 0;
+  }
+  .split-branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .branch-label {
+    font-size: 10px;
+    padding: 3px 10px;
+    border: 1px solid;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+  }
+  .bl-yes { border-color: var(--green); color: var(--green); }
+  .bl-no  { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ── INVARIANT BOX ── */
+  .invariant {
+    border: 2px solid var(--accent);
+    background: rgba(255,170,59,0.04);
+    padding: 22px 26px;
+    margin: 28px 0;
+  }
+  .invariant h4 {
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .invariant p {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.75;
+  }
+  .invariant code {
+    font-size: 10px;
+    color: var(--accent3);
+    background: var(--surface2);
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── RULE BOX ── */
+  .rule-box {
+    border: 1px solid var(--accent);
+    background: rgba(255,170,59,0.04);
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .rb-icon { color: var(--accent); flex-shrink: 0; font-size: 15px; margin-top: 2px; }
+  .rb-text { font-size: 12px; line-height: 1.7; color: var(--text); }
+  .rb-text code {
+    font-size: 10px;
+    color: var(--accent3);
+    background: var(--surface2);
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+  }
+  .rb-text strong { color: var(--text-bright); font-weight: 400; }
+
+  /* ── MFT ANALOGY ── */
+  .analogy-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 24px 0;
+  }
+  .analogy-col { background: var(--bg); padding: 22px 20px; }
+  .analogy-col h4 {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 6px;
+  }
+  .analogy-col .sys {
+    font-size: 9px;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    display: block;
+    padding: 2px 8px;
+    border: 1px solid;
+    display: inline-block;
+  }
+  .analogy-col p { font-size: 11px; color: var(--text-dim); line-height: 1.7; }
+  .analogy-col code {
+    font-size: 10px;
+    color: var(--accent3);
+    background: var(--surface2);
+    padding: 1px 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── SCHEMA ── */
+  .schema-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent4);
+    padding: 28px;
+    overflow-x: auto;
+    margin-bottom: 24px;
+  }
+  .schema-block pre {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.9;
+    color: var(--text);
+    white-space: pre;
+  }
+  .kw { color: var(--accent4); }
+  .ty { color: var(--accent); }
+  .cm { color: var(--text-dim); }
+  .st { color: var(--accent3); }
+
+  /* ── INNOVATIONS ── */
+  .innov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .innov-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 24px 26px;
+  }
+  .innov-n {
+    font-family: var(--display);
+    font-size: 36px;
+    font-weight: 800;
+    opacity: 0.3;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .innov-title {
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .innov-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.75;
+    margin-bottom: 10px;
+  }
+  .innov-tag {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    border: 1px solid var(--border);
+    display: inline-block;
+    padding: 2px 8px;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+    margin-top: 64px;
+  }
+  .footer-left { font-size: 12px; color: var(--text-dim); line-height: 1.9; }
+  .footer-right { font-size: 10px; color: var(--text-dim); letter-spacing: 2px; text-align: right; line-height: 1.9; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-glyph">CORE<span>.</span><br>SEARCH</div>
+    <div class="header-sub">Core Searching Algorithm — AXIOM Internal Subsystem</div>
+    <div class="header-line">
+      <span class="badge b-amber">index_daemon.py</span>
+      <span class="badge b-orange">topology_parser.py</span>
+      <span class="badge b-gold">signal_kernel/</span>
+      <span class="badge b-purple">Hivemind Shared Layer</span>
+      <span class="badge b-warm">Three-Phase Cognition</span>
+      <span class="badge b-green">v0.2 — PARSER + KERNEL ADDED</span>
+    </div>
+  </header>
+
+  <!-- WHAT THIS IS -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">Core Concept</span>
+    <div class="sec-title">Every Other RAG Searches. This One Navigates.</div>
+
+    <div class="phil">
+      <h3>The Problem With Every Existing RAG System</h3>
+      <p>Every RAG system — without exception — treats the web as undiscovered territory on every single run. Query arrives. Search executes. Signal is hunted. Extraction is attempted. The system knows nothing more after 10,000 runs than it did after run one. It is permanently naive. Permanently exploring. Permanently paying the full cost of discovery on every invocation.</p>
+      <p>This is not a retrieval problem. It is a cognition problem. The system has no mental model of the information landscape. It has no map. It does not know what it does not know, and it does not know what it already knows. It is a person who forgets every journey the moment they arrive home.</p>
+      <p>The Cognitive Index Daemon eliminates this at the structural level. Not through better search. Not through smarter prompts. Through a continuously maintained mental model of web information topology — built from every crawl, indexed like a filesystem, queried before any live traversal begins, updated only on genuine structural surprise. After enough runs, AXIOM does not search the web. It navigates a map it built itself.</p>
+    </div>
+
+    <div class="break-grid">
+      <div class="break-col">
+        <span class="break-col-label" style="color:var(--red)">What every RAG does on every run</span>
+        <div class="break-item bad"><strong>Query arrives</strong> — system knows nothing, starts from zero</div>
+        <div class="break-item bad"><strong>Live traversal</strong> — explores as if the web has never been seen</div>
+        <div class="break-item bad"><strong>Friction discovered at runtime</strong> — CTA hits, honeypots, rate limits hit live</div>
+        <div class="break-item bad"><strong>Mutation on failure</strong> — reacts after signal is lost</div>
+        <div class="break-item bad"><strong>No memory of topology</strong> — run 10,000 is identical to run 1</div>
+        <div class="break-item bad"><strong>Permanently naive</strong> — exploration cost never amortizes</div>
+      </div>
+      <div class="break-col">
+        <span class="break-col-label" style="color:var(--green)">What AXIOM does after the daemon builds its map</span>
+        <div class="break-item good"><strong>Query arrives</strong> — topology class classified immediately</div>
+        <div class="break-item good"><strong>MFT query first</strong> — index hit before any live byte transmitted</div>
+        <div class="break-item good"><strong>Friction pre-empted</strong> — daemon knows friction topology in advance</div>
+        <div class="break-item good"><strong>Route around failure</strong> — anticipates dead ends before hitting them</div>
+        <div class="break-item good"><strong>Compounding map</strong> — every run makes every future run sharper</div>
+        <div class="break-item good"><strong>Exploration cost amortizes to near zero</strong> — on known topology classes</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- THREE PHASE COGNITION -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">Cognitive Architecture</span>
+    <div class="sec-title">Three-Phase Cognition — Learns Until It Knows</div>
+
+    <div class="rule-box">
+      <div class="rb-icon">◈</div>
+      <div class="rb-text">This is not a static model. It evolves through three distinct phases — each phase representing a qualitative shift in how the daemon relates to the information landscape. The transition from Phase II to Phase III is the architectural goal. Phase III is what makes the crawler feel sentient.</div>
+    </div>
+
+    <div class="phase-row">
+      <div class="phase" data-n="I">
+        <span class="phase-num" style="color:var(--accent2)">Phase I — Learns</span>
+        <div class="phase-title">World Model Construction</div>
+        <div class="phase-body">
+          The daemon starts with no map. Every crawl is a discovery event. The world model is building its structural layer from first principles — what topology classes exist, what their invariant primitives are, how friction patterns correlate with structural causes.
+          <br><br>
+          Every outcome — coverage delta, avoidance event, mutation result — feeds back into the model as a training signal. Prediction error is high. Uncertainty bounds are wide. The system explicitly simulates futures in latent space before committing to actions.
+          <br><br>
+          This phase is expensive and uncertain. It is also <strong style="color:var(--text)">necessary and finite.</strong> The daemon passes through it once per structural primitive class.
+        </div>
+        <span class="phase-state" style="border-color:var(--accent2);color:var(--accent2)">EXPLICIT SIMULATION // HIGH UNCERTAINTY</span>
+      </div>
+      <div class="phase" data-n="II">
+        <span class="phase-num" style="color:var(--accent3)">Phase II — Predicts Until Learned</span>
+        <div class="phase-title">Model-Based RL — Latent Planning</div>
+        <div class="phase-body">
+          The world model has enough structure to simulate reliably. Prediction error is collapsing toward zero on known topology classes. The daemon is running futures in latent space — simulating 5, 10, 20 trajectories internally before committing to one action in the real world.
+          <br><br>
+          The choice that emerges looks intentional because it is. It is the output of internal simulation against a continuously updated causal model. The crawler appears to know what it will find before it looks. It routes around friction that has not happened yet because it has a model of why friction occurs structurally.
+          <br><br>
+          This is not prediction in the naive sense. This is <strong style="color:var(--text)">anticipation.</strong> The system knows what it does not yet know precisely enough to act on that knowledge.
+        </div>
+        <span class="phase-state" style="border-color:var(--accent3);color:var(--accent3)">LATENT SIMULATION // COLLAPSING ERROR</span>
+      </div>
+      <div class="phase" data-n="III">
+        <span class="phase-num" style="color:var(--green)">Phase III — Knows</span>
+        <div class="phase-title">Policy Distillation — Compiled Knowledge</div>
+        <div class="phase-body">
+          The planning process has been amortized into a direct policy. No more simulation. The world model is so accurate on this topology class that simulation and action have become the same thing. The daemon acts without predicting because prediction is no longer necessary.
+          <br><br>
+          This is <code>compiled knowledge</code> in the cognitive science sense — the shift from declarative to procedural. You stop thinking about how to ride a bike. You ride it.
+          <br><br>
+          The crawler navigates known topology the way Linux <code>locate</code> queries an index — not by exploring, by <strong style="color:var(--text)">looking up what it already knows.</strong> The MFT is built. The filesystem is mapped. Live traversal becomes the fallback, not the default.
+        </div>
+        <span class="phase-state" style="border-color:var(--green);color:var(--green)">DIRECT POLICY // ZERO SIMULATION COST</span>
+      </div>
+    </div>
+
+    <div class="invariant">
+      <h4>THE SURPRISE DETECTOR — HOW PHASE III STAYS HONEST</h4>
+      <p>The web is non-stationary at the surface. A site restructures. A paywall appears. A CDN changes its fingerprint. Without a mechanism to detect this, Phase III becomes dangerous — the crawler acts confidently on an outdated mental model and doesn't know it's wrong. The surprise detector is the immune system. It monitors continuously for divergence between expected outcomes and actual outcomes. When surprise on a known topology class exceeds threshold θ_surprise, the compiled policy for that class dissolves back into Phase II prediction mode. The daemon relearns. Recompiles. Returns to Phase III. <strong style="color:var(--accent)">The crawler knows — until the world changes. Then it notices it doesn't know. Then it learns again. This cycle never terminates.</strong></p>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- MFT ANALOGY -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">The Filesystem Insight</span>
+    <div class="sec-title">Why Linux find Is Fast — And What That Means For The Web</div>
+
+    <div class="phil" style="border-left-color:var(--accent3)">
+      <h3 style="color:var(--accent3)">The Analogy That Unlocks The Architecture</h3>
+      <p>Linux <code>locate</code> does not search the filesystem. It queries a pre-built index maintained by <code>updatedb</code> running in the background. When you type a filename, it is already known. <code>find</code> is the fallback — live traversal only when the index misses. The recursive parameter does not re-explore; it follows a pre-mapped structure to a known base condition. The base condition is not structural — it is epistemic. The search terminates when the answer is found in the index.</p>
+      <p>Windows MFT is the same principle. Every file has a Master File Table entry. Search queries the table, not the disk. The USN journal tracks incremental changes so the index never rebuilds from scratch — only diffs. The filesystem does not become slower as it grows. It becomes faster, because more entries mean more precise routing.</p>
+      <p>AXIOM's Cognitive Index Daemon is the MFT for the web. The structural layer is the table. The surprise detector is the USN journal. Live traversal is <code>find</code>. The base condition — when the daemon stops — is not depth. It is world model confidence exceeding threshold on the active topology class.</p>
+    </div>
+
+    <div class="analogy-grid">
+      <div class="analogy-col">
+        <span class="sys" style="border-color:var(--text-dim);color:var(--text-dim)">LINUX FILESYSTEM</span>
+        <h4>locate + updatedb</h4>
+        <p><code>locate</code> = index query. <code>updatedb</code> = background index maintenance. <code>find</code> = live traversal fallback. USN journal = incremental diff tracking. Base condition = file found in index. Cost amortizes across every query after index is built.</p>
+      </div>
+      <div class="analogy-col">
+        <span class="sys" style="border-color:var(--accent);color:var(--accent)">AXIOM DAEMON</span>
+        <h4>MFT Query + Daemon</h4>
+        <p>MFT query = structural layer hit. Daemon = background model training. Live traversal = index miss fallback. Surprise detector = diff tracking for topology changes. Base condition = world model confidence ≥ threshold. Cost amortizes across every run after structural layer builds.</p>
+      </div>
+      <div class="analogy-col">
+        <span class="sys" style="border-color:var(--accent3);color:var(--accent3)">WHAT THIS PRODUCES</span>
+        <h4>Filesystem Efficiency On The Web</h4>
+        <p>The crawler is not searching. It is navigating a mental map it built itself. Unknown topology triggers live traversal and index expansion. Known topology triggers direct routing. The map compounds with every run. The gap between AXIOM and naive RAG widens automatically, without code changes.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- HIVEMIND -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">Distributed Architecture</span>
+    <div class="sec-title">The Hivemind — Shared Structural Layer Across All Instances</div>
+
+    <div class="rule-box" style="border-color:var(--accent4);background:rgba(224,122,255,0.04)">
+      <div class="rb-icon" style="color:var(--accent4)">◈</div>
+      <div class="rb-text">Every deployed crawler instance is different. Every deployed crawler instance thinks the same. This is not a contradiction — it is the architectural property that makes the hivemind work. The structural layer is invariant knowledge shared across all instances. The tactical layer is instance-specific learned composition. A new crawler arrives already knowing everything about how the web works structurally. It only needs to learn how this particular site combines known primitives.</div>
+    </div>
+
+    <div class="break-grid" style="grid-template-columns: 1fr 1fr;">
+      <div class="break-col">
+        <span class="break-col-label" style="color:var(--accent4)">Structural Layer — Hivemind Shared</span>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.85;">
+          Invariant primitives. The things the web does not change. OWASP compliance patterns. Standard auth redirect topologies. Common CMS architectures. CDN fingerprints. Bot mitigation signatures — Cloudflare, Turnstile, hCaptcha. REST conventions. Paywall injection patterns. Login modal topologies.
+          <br><br>
+          This layer is built once across all instances. Federated continuously via the hivemind. A primitive learned by one instance is immediately available to every other instance. This layer barely updates because the primitives are structurally stable. It is the compiled knowledge that every crawler inherits at deployment.
+          <br><br>
+          <span style="color:var(--accent4)">New instance deploys → inherits structural layer → immediately non-naive.</span>
+        </div>
+      </div>
+      <div class="break-col">
+        <span class="break-col-label" style="color:var(--accent5)">Tactical Layer — Instance Local</span>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.85;">
+          Site-specific compositions. How this particular domain combines known primitives. What its specific friction topology looks like. What mutation types work for its source class. What its rate limit profile is. What its render mode requirements are.
+          <br><br>
+          This layer updates continuously but learning is dramatically cheaper — it is recognizing compositions from a known vocabulary, not discovering primitives from scratch. The search space is a Cartesian product of known primitives, not an unknown territory.
+          <br><br>
+          <span style="color:var(--accent5)">Unknown site encountered → structural layer provides vocabulary → tactical layer learns composition fast.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="invariant" style="border-color:var(--accent4);background:rgba(224,122,255,0.04)">
+      <h4 style="color:var(--accent4)">WHY THE SURPRISE DETECTOR FIRES RARELY ON THE HIVEMIND</h4>
+      <p>Structural primitives are stable. OWASP doesn't change quarterly. CDN fingerprints don't drift weekly. Bot mitigation signatures evolve slowly and predictably. The surprise detector for the structural layer is calibrated for genuine architectural change — not surface variation. It fires rarely. When it does, the new primitive is immediately shared across all instances via the hivemind. The entire fleet updates simultaneously. The cost of discovering a new primitive is paid once and amortized across every instance that will ever encounter it. <strong style="color:var(--accent4)">The fleet gets smarter together. No instance re-learns what another has already learned.</strong></p>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- CLOSED LOOP DIAGRAM -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">System Architecture</span>
+    <div class="sec-title">The Closed Loop — Full Signal Flow</div>
+
+    <div class="loop-container">
+      <div class="loop-diagram">
+
+        <div class="loop-row">
+          <div class="loop-node n-amber" style="min-width:220px">
+            <span class="n-id">INPUT</span>
+            <span class="n-name">QUERY + INTENT VECTOR</span>
+            <span class="n-sub">From AXIOM Controller — AxiomState</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-gold" style="min-width:220px">
+            <span class="n-id">STEP 01</span>
+            <span class="n-name">TOPOLOGY CLASSIFIER</span>
+            <span class="n-sub">Classify intent into known structural classes</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row" style="justify-content:center">
+          <div class="cond-label">CONDITIONAL: MFT HIT or MISS</div>
+        </div>
+
+        <div class="split-row">
+          <div class="split-branch">
+            <span class="branch-label bl-yes">HIT — KNOWN TOPOLOGY</span>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-green" style="min-width:190px">
+              <span class="n-id">STEP 02A</span>
+              <span class="n-name">MFT QUERY</span>
+              <span class="n-sub">Direct routing — no live traversal</span>
+            </div>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-green" style="min-width:190px">
+              <span class="n-id">STEP 03A</span>
+              <span class="n-name">PARAM POLICY OUTPUT</span>
+              <span class="n-sub">Traversal config from compiled policy</span>
+            </div>
+          </div>
+          <div class="split-branch">
+            <span class="branch-label bl-no">MISS — UNKNOWN TOPOLOGY</span>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-orange" style="min-width:190px">
+              <span class="n-id">STEP 02B</span>
+              <span class="n-name">LATENT SIMULATION</span>
+              <span class="n-sub">World model simulates trajectories</span>
+            </div>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-orange" style="min-width:190px">
+              <span class="n-id">STEP 03B</span>
+              <span class="n-name">BEST ACTION SELECTION</span>
+              <span class="n-sub">Highest value simulated path</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="arr-down" style="height:36px"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-warm" style="min-width:220px">
+            <span class="n-id">STEP 04</span>
+            <span class="n-name">LIVE TRAVERSAL</span>
+            <span class="n-sub">Phantom executes — Playwright / httpx</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-amber" style="min-width:220px">
+            <span class="n-id">STEP 05</span>
+            <span class="n-name">OUTCOME CAPTURE</span>
+            <span class="n-sub">Coverage delta · avoidance events · signal quality</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-purple" style="min-width:220px">
+            <span class="n-id">STEP 06</span>
+            <span class="n-name">SURPRISE DETECTOR</span>
+            <span class="n-sub">Prediction error vs threshold θ_surprise</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row" style="justify-content:center">
+          <div class="cond-label">CONDITIONAL: SURPRISE HIGH or LOW</div>
+        </div>
+
+        <div class="split-row">
+          <div class="split-branch">
+            <span class="branch-label bl-yes">LOW SURPRISE — UPDATE INDEX</span>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-green" style="min-width:190px">
+              <span class="n-id">STEP 07A</span>
+              <span class="n-name">MFT UPDATE</span>
+              <span class="n-sub">Incremental diff — USN journal equivalent</span>
+            </div>
+            <div class="arr-down" style="height:20px"></div>
+            <div style="font-size:10px;color:var(--text-dim);letter-spacing:2px">STRUCTURAL LAYER STABLE</div>
+          </div>
+          <div class="split-branch">
+            <span class="branch-label bl-no">HIGH SURPRISE — RELEARN</span>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-red" style="min-width:190px">
+              <span class="n-id">STEP 07B</span>
+              <span class="n-name">POLICY DISSOLVE</span>
+              <span class="n-sub">Phase III → Phase II for this class</span>
+            </div>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-orange" style="min-width:190px">
+              <span class="n-id">STEP 08B</span>
+              <span class="n-name">RELEARN + RECOMPILE</span>
+              <span class="n-sub">New primitive → hivemind share if structural</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <p style="font-size:11px;color:var(--text-dim);margin-top:16px;line-height:1.7">The loop never terminates. Every crawl either confirms the map or updates it. After enough runs, most queries hit the MFT on step 01 and route directly to live traversal with pre-computed params. The daemon is always running in the background. It is never consulted and never visible. It just makes AXIOM progressively more prescient with no code changes and no human intervention.</p>
+  </section>
+
+  <hr class="div">
+
+  <!-- PARAMETER POLICY -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">Parameter Policy — The Hidden Output</span>
+    <div class="sec-title">The Daemon Doesn't Just Say Where. It Says How.</div>
+
+    <div class="phil" style="border-left-color:var(--accent2)">
+      <h3 style="color:var(--accent2)">The Controller Doesn't Set Traversal Params. The Daemon Does.</h3>
+      <p>In every other crawling system, traversal parameters — depth, breadth, render mode, timeout budget, retry threshold, request pacing — are fixed values in a config file. They are the same for every crawl regardless of what the system knows about the target topology. This is inefficient in both directions: too aggressive on friction-heavy topologies, too conservative on clean ones.</p>
+      <p>The daemon's parameter policy changes this. The ML model does not just output where to go. It outputs <strong>how to traverse</strong> — the complete parameter set optimized for the current topology class based on everything the world model knows about it. High confidence topology gets shallow fast traversal. Low confidence topology gets deep slow careful traversal. Surprise-flagged topology gets full stop and reindex before a single byte is transmitted.</p>
+    </div>
+
+    <table class="layer-table">
+      <tr>
+        <th>Parameter</th>
+        <th>Fixed Config Approach</th>
+        <th>Daemon Policy Output</th>
+        <th>Why This Matters</th>
+      </tr>
+      <tr>
+        <td style="color:var(--accent)">Traversal Depth</td>
+        <td style="color:var(--text-dim)">Static value — same for everything</td>
+        <td>World model confidence drives depth. High confidence → shallow. Low confidence → deep. Unknown → max depth with live learning.</td>
+        <td>Stops AXIOM paying full traversal cost on topology it already understands at surface level.</td>
+      </tr>
+      <tr>
+        <td style="color:var(--accent3)">Render Mode</td>
+        <td style="color:var(--text-dim)">Heuristic rules or always-headless</td>
+        <td>Structural layer encodes render requirements per topology class. Static fetcher for known static topologies. Headless only when the model says JS is structurally required.</td>
+        <td>Headless browser is expensive. Not paying for it when the index already knows it's unnecessary.</td>
+      </tr>
+      <tr>
+        <td style="color:var(--accent2)">Request Pacing</td>
+        <td style="color:var(--text-dim)">Global rate limit config</td>
+        <td>Per-topology-class pacing derived from rate limit profiles stored in structural layer. The daemon knows Cloudflare-fronted domains before it hits them.</td>
+        <td>Sustainable pacing before the first request. Never triggers a rate limit event. Never backs off reactively.</td>
+      </tr>
+      <tr>
+        <td style="color:var(--accent4)">Retry Threshold</td>
+        <td style="color:var(--text-dim)">Exponential backoff on failure</td>
+        <td>Zero retries on surprise-flagged topology. Aggressive retry budget on high-confidence stable topology. The model knows when a failure is transient versus structural.</td>
+        <td>Stops wasting retry budget on structural failures. Maximizes it on transient ones.</td>
+      </tr>
+      <tr>
+        <td style="color:var(--green)">Source Priority</td>
+        <td style="color:var(--text-dim)">Static source ranking in ScrapePlan</td>
+        <td>Tactical layer reorders source priority based on historical signal density for this intent class on these source types. Best signal first, always.</td>
+        <td>Stops exhausting low-signal sources before high-signal ones. Coverage converges faster.</td>
+      </tr>
+    </table>
+  </section>
+
+  <hr class="div">
+
+  <!-- SCHEMA -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">Data Contract</span>
+    <div class="sec-title">IndexDaemon State — What The Model Maintains</div>
+
+    <div class="schema-block">
+      <pre><span class="cm"># index_daemon/state.py — internal world model state</span>
+<span class="cm"># Never surfaced to graph. Never visible to controller. Just runs.</span>
+
+<span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">TopologyClass</span>:
+    class_id:           <span class="ty">str</span>             <span class="cm"># hash of structural primitive composition</span>
+    primitive_set:      <span class="ty">FrozenSet[str]</span>  <span class="cm"># which structural primitives this class uses</span>
+    phase:              <span class="ty">Literal["learns", "predicts", "knows"]</span>
+    confidence:         <span class="ty">float</span>           <span class="cm"># world model confidence on this class</span>
+    compiled_policy:    <span class="ty">Optional[DirectPolicy]</span>  <span class="cm"># None until Phase III</span>
+    traversal_params:   <span class="ty">TraversalConfig</span> <span class="cm"># depth, render_mode, pacing, retry_budget</span>
+    surprise_baseline:  <span class="ty">float</span>           <span class="cm"># expected prediction error for this class</span>
+    last_surprise:      <span class="ty">float</span>           <span class="cm"># most recent actual prediction error</span>
+    run_count:          <span class="ty">int</span>             <span class="cm"># runs that touched this class</span>
+
+<span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">StructuralLayer</span>:               <span class="cm"># HIVEMIND SHARED — federated across all instances</span>
+    primitives:         <span class="ty">Dict[str, StructuralPrimitive]</span>
+    last_sync:          <span class="ty">datetime</span>
+    fleet_version:      <span class="ty">int</span>           <span class="cm"># increments on any primitive update across fleet</span>
+
+<span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">TacticalLayer</span>:                 <span class="cm"># INSTANCE LOCAL — per-deployed-crawler</span>
+    topology_classes:   <span class="ty">Dict[str, TopologyClass]</span>
+    mft_index:          <span class="ty">Dict[str, MFTEntry]</span>   <span class="cm"># class_id → routing instructions</span>
+    usn_journal:        <span class="ty">List[TopologyDiff]</span>    <span class="cm"># incremental updates — never full rebuild</span>
+
+<span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="ty">DaemonState</span>:
+    structural:         <span class="ty">StructuralLayer</span>
+    tactical:           <span class="ty">TacticalLayer</span>
+    active_phase:       <span class="ty">Dict[str, Phase]</span>      <span class="cm"># per topology class</span>
+    surprise_threshold: <span class="ty">float</span>                 <span class="cm"># θ_surprise — tunable</span>
+    run_total:          <span class="ty">int</span>                   <span class="cm"># lifetime crawls this instance has seen</span>
+
+<span class="kw">@dataclass</span>(frozen=<span class="st">True</span>)
+<span class="kw">class</span> <span class="ty">DaemonQuery</span>:                    <span class="cm"># what the controller asks the daemon</span>
+    intent_vector:      <span class="ty">IntentVector</span>
+    target_urls:        <span class="ty">List[str]</span>
+
+<span class="kw">@dataclass</span>(frozen=<span class="st">True</span>)
+<span class="kw">class</span> <span class="ty">DaemonResponse</span>:                 <span class="cm"># what the daemon returns — controller asks nothing else</span>
+    traversal_config:   <span class="ty">TraversalConfig</span>
+    source_priority:    <span class="ty">List[str]</span>       <span class="cm"># reordered by signal density prediction</span>
+    friction_forecast:  <span class="ty">Dict[str, float]</span> <span class="cm"># url → predicted friction score</span>
+    mft_hit:            <span class="ty">bool</span>
+    phase:              <span class="ty">Phase</span>           <span class="cm"># which phase this topology class is in</span></pre>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- INNOVATIONS -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">What This Changes</span>
+    <div class="sec-title">Why This Is Different From Everything Existing</div>
+
+    <div class="innov-grid">
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent)">01</div>
+        <div class="innov-title">The First RAG System That Compiles Its Knowledge</div>
+        <div class="innov-desc">Every RAG system remains permanently in Phase I — perpetual exploration with no accumulated structural knowledge. The three-phase architecture is the first formalization of a RAG system that transitions from learning to knowing. Phase III is not a design goal — it is an emergent property of the closed loop running long enough. The system compiles itself.</div>
+        <div class="innov-tag">THREE-PHASE COGNITION</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent3)">02</div>
+        <div class="innov-title">MFT-Indexed Information Topology</div>
+        <div class="innov-desc">Applying filesystem index architecture to web information topology. The insight that web structural primitives are stable enough to index — OWASP patterns, CMS architectures, CDN fingerprints — and that indexing them makes live traversal a fallback not the default. The web stops being a search problem. It becomes a navigation problem.</div>
+        <div class="innov-tag">MFT ARCHITECTURE</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent2)">03</div>
+        <div class="innov-title">Parameter Policy As Model Output</div>
+        <div class="innov-desc">The daemon does not just output routing decisions. It outputs the complete traversal configuration — depth, render mode, pacing, retry budget, source priority — as a function of world model confidence on the current topology class. Traversal parameters are no longer config values. They are learned outputs that adapt automatically to what the model knows.</div>
+        <div class="innov-tag">PARAMETER POLICY</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent4)">04</div>
+        <div class="innov-title">Hivemind Structural Federation</div>
+        <div class="innov-desc">The two-layer architecture — shared structural primitives and local tactical compositions — means every new deployed instance is immediately non-naive. It inherits the compiled structural knowledge of every previous crawl across the entire fleet. A primitive discovered by one instance is never re-discovered by another. The fleet gets smarter together as a single compounding intelligence.</div>
+        <div class="innov-tag">HIVEMIND FEDERATION</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--green)">05</div>
+        <div class="innov-title">Compounding Moat — Widens Automatically</div>
+        <div class="innov-desc">Every other RAG starts every run equally naive. After 10,000 runs AXIOM is not searching the web anymore — it is navigating a map it built itself. The gap between AXIOM and a naive RAG system widens with every single run, automatically, without code changes, without human intervention. The moat is not the architecture. The moat is the accumulated index that the architecture produces.</div>
+        <div class="innov-tag">COMPOUNDING INTELLIGENCE</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent5)">06</div>
+        <div class="innov-title">Invisible By Design — One File, No Comments</div>
+        <div class="innov-desc"><code style="font-size:10px;color:var(--accent3);background:var(--surface2);padding:1px 5px;border:1px solid var(--border)">index_daemon.py</code>. Single file. No comments explaining what it is. Lives in a utils directory. Looks like a background indexer. The controller queries it like a lookup table. No graph node knows what it is. No topology in the architecture spec mentions it by name. The most architecturally significant component in AXIOM has the most boring name.</div>
+        <div class="innov-tag">SECURITY THROUGH OBSCURITY + DESIGN</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- WORLD LATENT PARSER -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">World Latent Parser — topology_parser.py</span>
+    <div class="sec-title">The Model Sees From Satellite. The Parser Runs The Streets.</div>
+
+    <div class="phil" style="border-left-color:var(--accent3)">
+      <h3 style="color:var(--accent3)">Two Components. Two Different Kinds Of Knowledge.</h3>
+      <p>The World Latent Model tells AXIOM what the web looks like from above. Topology classes. Structural primitives. How sites compose known patterns from altitude. It knows this is a news site class, this is a SaaS docs class, this is an e-commerce product page. It builds the map.</p>
+      <p>The World Latent Parser runs the streets of that map. It does not parse content — not text, not images, not semantic meaning. It parses only the structural grammar of the web itself. It learns where signal actually lives within a page's architecture. Which structural zones are always content. Which are always noise. What every web page shares regardless of domain or purpose.</p>
+      <p>The map tells you what country you are in. The parser tells you where the buildings are, which ones are houses and which are decorations, which streets lead somewhere and which are dead ends. Together they give the daemon a complete mental model of the web — from altitude and from ground level simultaneously.</p>
+    </div>
+
+    <div class="break-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="break-col">
+        <span class="break-col-label" style="color:var(--accent3)">What Every Web Page Shares — The Invariants</span>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.9;">
+          <div style="padding:8px 12px;border-left:2px solid var(--accent3);background:rgba(255,209,102,0.04);margin-bottom:6px"><code style="color:var(--accent3);font-size:10px">&lt;article&gt;, &lt;main&gt;</code> — signal zones on every standards-compliant page</div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent3);background:rgba(255,209,102,0.04);margin-bottom:6px"><code style="color:var(--accent3);font-size:10px">&lt;nav&gt;, &lt;aside&gt;, &lt;footer&gt;</code> — noise zones universally</div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent3);background:rgba(255,209,102,0.04);margin-bottom:6px"><code style="color:var(--accent3);font-size:10px">&lt;script type="application/ld+json"&gt;</code> — structured data, always in <code style="color:var(--accent3);font-size:10px">&lt;head&gt;</code></div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent3);background:rgba(255,209,102,0.04);margin-bottom:6px"><code style="color:var(--accent3);font-size:10px">&lt;meta&gt;</code> OpenGraph tags — always in <code style="color:var(--accent3);font-size:10px">&lt;head&gt;</code>, never in <code style="color:var(--accent3);font-size:10px">&lt;body&gt;</code></div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent3);background:rgba(255,209,102,0.04);margin-bottom:6px">REST API JSON envelope patterns — <code style="color:var(--accent3);font-size:10px">data</code>, <code style="color:var(--accent3);font-size:10px">results</code>, <code style="color:var(--accent3);font-size:10px">items</code> keys universally</div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent3);background:rgba(255,209,102,0.04);margin-bottom:6px">DOM depth correlates with noise — deeply nested divs are always chrome, never content</div>
+        </div>
+      </div>
+      <div class="break-col">
+        <span class="break-col-label" style="color:var(--accent4)">What The Parser Learns From These Invariants</span>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.9;">
+          <div style="padding:8px 12px;border-left:2px solid var(--accent4);background:rgba(224,122,255,0.04);margin-bottom:6px">Signal is near <code style="color:var(--accent3);font-size:10px">&lt;article&gt;</code>. Noise is near <code style="color:var(--accent3);font-size:10px">&lt;nav&gt;</code>. This is not heuristic — it is learned from thousands of pages.</div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent4);background:rgba(224,122,255,0.04);margin-bottom:6px">Structured data lives in <code style="color:var(--accent3);font-size:10px">&lt;head&gt;</code>. If it is in <code style="color:var(--accent3);font-size:10px">&lt;body&gt;</code> it is not structured data — it is injected noise.</div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent4);background:rgba(224,122,255,0.04);margin-bottom:6px">Div nesting depth &gt; 8 is almost never content. Discard before any LLM sees it.</div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent4);background:rgba(224,122,255,0.04);margin-bottom:6px">On/off critical paths — elements marked as <strong style="color:var(--text)">on critical</strong> (signal zones) vs <strong style="color:var(--text)">off critical</strong> (noise zones) per topology class.</div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent4);background:rgba(224,122,255,0.04);margin-bottom:6px">JSON envelope keys that always contain payload vs keys that always contain pagination metadata.</div>
+          <div style="padding:8px 12px;border-left:2px solid var(--accent4);background:rgba(224,122,255,0.04);margin-bottom:6px">Per topology class: exact structural zones where information is. Not approximate — learned and compiled.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rule-box" style="border-color:var(--accent3);background:rgba(255,209,102,0.04)">
+      <div class="rb-icon" style="color:var(--accent3)">◈</div>
+      <div class="rb-text">The parser does not parse anything it does not need. Not text. Not images. Not semantic meaning. Only structural grammar. Only the on/off critical path classification of DOM zones and JSON keys per topology class. The output is not extracted content — it is a <strong>recipe</strong>. A precise structural map of where signal lives in this class of page. That recipe feeds directly into the signal kernel.</div>
+    </div>
+
+    <div class="analogy-grid">
+      <div class="analogy-col">
+        <span class="sys" style="border-color:var(--accent3);color:var(--accent3)">INPUT</span>
+        <h4>Raw DOM / JSON Structure</h4>
+        <p>HTML tag hierarchy. DOM depth. Semantic zone identification. JSON key topology. Script type attributes. Meta tag locations. Nothing else. The parser never reads text content — only structural positions and relationships.</p>
+      </div>
+      <div class="analogy-col">
+        <span class="sys" style="border-color:var(--accent);color:var(--accent)">PROCESS</span>
+        <h4>Critical Path Classification</h4>
+        <p>Every structural zone classified as <code>ON_CRITICAL</code> — signal lives here — or <code>OFF_CRITICAL</code> — discard before LLM sees it. Classification is per topology class, not per page. One learned recipe applies to every page in that class.</p>
+      </div>
+      <div class="analogy-col">
+        <span class="sys" style="border-color:var(--accent4);color:var(--accent4)">OUTPUT</span>
+        <h4>Grep Recipe Per Topology Class</h4>
+        <p>A compiled shell pipeline. <code>grep</code>, <code>sed</code>, <code>awk</code> instructions that extract exactly the on-critical zones and discard everything else. The recipe is what the signal kernel executes. The intelligence is entirely in the recipe — not in the kernel.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- SIGNAL KERNEL -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">Signal Kernel — signal_kernel/</span>
+    <div class="sec-title">grep Is C. C Is Fast. Two Processes. Zero Coupling.</div>
+
+    <div class="phil" style="border-left-color:var(--accent2)">
+      <h3 style="color:var(--accent2)">The Cheapest Tokenizer In Existence — With A Silent Second Job</h3>
+      <p>Every RAG system hands raw HTML to an LLM. The LLM burns tokens on <code>&lt;div class="sidebar-widget-container"&gt;</code> before it reads a single word of actual signal. The signal kernel inverts this. A minimal Alpine Linux container receives raw HTML and the grep recipe compiled by the topology parser. It runs the pipeline. <code>grep</code> is C. C operates at memory bandwidth speed on raw text. What exits the kernel is clean signal text. The LLM only sees what it needs to reason about.</p>
+      <p>The kernel has two independent processes. Process 1 is the grep pipeline — stateless, invoked per extraction, exits when done. Process 2 is a checkpoint daemon — <code>crond</code>, fires every 15 minutes, reads the four index files from the mounted volume, writes a compressed archive. Two processes sharing one OS. Zero coupling between them. If the checkpoint daemon crashes, grep keeps running. If a grep invocation hangs, the checkpoint daemon keeps firing. Same Alpine container. Completely separate concerns.</p>
+    </div>
+
+    <!-- TWO PROCESS LAYOUT -->
+    <div class="break-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="break-col">
+        <span class="break-col-label" style="color:var(--accent2)">Process 1 — grep Pipeline</span>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.85;">
+          Invoked per extraction by <code style="color:var(--accent3);font-size:10px">pipeline.py</code>. Receives raw HTML or JSON via stdin. Recipe mounted as <code style="color:var(--accent3);font-size:10px">run.sh</code> at runtime — assembled by <code style="color:var(--accent3);font-size:10px">topology_parser.py</code>. Outputs clean signal text to stdout. Exits immediately when done.
+          <br><br>
+          No state. No memory. No intelligence. Stateless — every invocation is fresh. The recipe is the only thing that changes between topology classes. The process itself is identical every time.
+          <br><br>
+          <span style="color:var(--accent2)">Cost: zero LLM tokens. Latency: milliseconds. Intelligence: none — all in the recipe.</span>
+        </div>
+      </div>
+      <div class="break-col">
+        <span class="break-col-label" style="color:var(--accent3)">Process 2 — Checkpoint Daemon</span>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.85;">
+          Long-running <code style="color:var(--accent3);font-size:10px">crond</code> process. Fires every 15 minutes independently of query volume. Reads the four index files from <code style="color:var(--accent3);font-size:10px">/store</code> volume — <code style="color:var(--accent3);font-size:10px">topology_router.pt</code>, <code style="color:var(--accent3);font-size:10px">recipe_registry.mmap</code>, <code style="color:var(--accent3);font-size:10px">phase_states.mmap</code>, <code style="color:var(--accent3);font-size:10px">structural_layer.pt</code>. Writes compressed archive. Rotates — keeps last 48 checkpoints. 12 hours of history on disk.
+          <br><br>
+          <span style="color:var(--accent3)">Zero network. Zero external service. Zero trust required. Worst case data loss: 15 minutes of RL training.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- GREP RECIPES -->
+    <span class="sec-label" style="margin-top:28px">Compiled Recipe Examples — Per Topology Class</span>
+
+    <div class="schema-block" style="border-left-color:var(--accent2)">
+      <pre><span class="cm"># topology_class: NEWS_ARTICLE — signal lives in &lt;article&gt;</span>
+grep -A 10000 <span class="st">"&lt;article"</span> | grep -B 10000 <span class="st">"&lt;/article&gt;"</span> \
+  | grep -v <span class="st">"&lt;nav"</span> | grep -v <span class="st">"&lt;aside"</span> | grep -v <span class="st">"&lt;footer"</span> \
+  | sed <span class="st">'s/&lt;[^&gt;]*&gt;//g'</span> | grep -v <span class="st">"^[[:space:]]*$"</span> \
+  | tr -s <span class="st">' '</span>
+
+<span class="cm"># topology_class: SAAS_DOCS — signal in &lt;main&gt;, structured data in &lt;head&gt;</span>
+grep -A 10000 <span class="st">"&lt;main"</span> | grep -B 10000 <span class="st">"&lt;/main&gt;"</span> \
+  | grep -v <span class="st">"&lt;aside"</span> | grep -v <span class="st">'class=".*sidebar.*"'</span> \
+  | sed <span class="st">'s/&lt;[^&gt;]*&gt;//g'</span> | awk <span class="st">'NF'</span> | tr -s <span class="st">' \t'</span>
+
+<span class="cm"># topology_class: REST_API_JSON — envelope extraction, discard pagination metadata</span>
+grep -o <span class="st">'"data":[^}]*'</span> | grep -v <span class="st">'"pagination"'</span> \
+  | grep -v <span class="st">'"meta"'</span> | grep -v <span class="st">'"links"'</span> \
+  | sed <span class="st">'s/"data"://'</span>
+
+<span class="cm"># topology_class: JSON_LD_STRUCTURED — schema.org data from &lt;head&gt; only</span>
+grep -A 100 <span class="st">'type="application/ld+json"'</span> \
+  | grep -B 100 <span class="st">"&lt;/script&gt;"</span> \
+  | grep -v <span class="st">"&lt;script"</span> | grep -v <span class="st">"&lt;/script"</span>
+
+<span class="cm"># topology_class: ECOMMERCE_PRODUCT — signal near data-* attributes, not in nav/footer</span>
+grep -E <span class="st">'data-(product|price|sku|name)'</span> \
+  | grep -v <span class="st">"data-analytics"</span> | grep -v <span class="st">"data-tracking"</span> \
+  | sed <span class="st">'s/&lt;[^&gt;]*&gt;//g'</span> | grep -v <span class="st">"^$"</span></pre>
+    </div>
+
+    <!-- DOCKERFILE + CHECKPOINT -->
+    <div class="schema-block" style="border-left-color:var(--accent2)">
+      <pre><span class="cm"># signal_kernel/Dockerfile — entire container definition</span>
+<span class="kw">FROM</span> <span class="ty">alpine:3.19</span>
+<span class="kw">RUN</span> apk add --no-cache grep sed gawk coreutils dcron tar gzip
+<span class="kw">COPY</span> checkpoint/mft_checkpoint.sh /etc/periodic/15min/mft_checkpoint
+<span class="kw">RUN</span> chmod +x /etc/periodic/15min/mft_checkpoint
+<span class="kw">CMD</span> [<span class="st">"sh"</span>, <span class="st">"-c"</span>, <span class="st">"crond -f &amp; exec /bin/sh /recipe/run.sh"</span>]
+
+<span class="cm"># Process 1: grep pipeline — invoked per extraction via exec</span>
+<span class="cm"># Process 2: crond — fires mft_checkpoint every 15 minutes</span>
+<span class="cm"># Two processes. Same OS. Zero coupling.</span>
+
+<span class="cm"># signal_kernel/checkpoint/mft_checkpoint.sh</span>
+<span class="cm">#!/bin/sh</span>
+CHECKPOINT_DIR=<span class="st">/store/checkpoints</span>
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+tar -czf $CHECKPOINT_DIR/mft_$TIMESTAMP.tar.gz \
+    /store/topology_router.pt \
+    /store/recipe_registry.mmap \
+    /store/phase_states.mmap \
+    /store/structural_layer.pt
+<span class="cm"># keep last 48 — 12 hours at 15min intervals</span>
+ls -t $CHECKPOINT_DIR/mft_*.tar.gz | tail -n +49 | xargs rm -f</pre>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- INDEX STORAGE -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">Index Storage — No Redis. No External Services. No Trust Required.</span>
+    <div class="sec-title">The Index Is The Model Weights. The Weights Are Files You Own.</div>
+
+    <div class="phil" style="border-left-color:var(--accent4)">
+      <h3 style="color:var(--accent4)">Why External Storage Is The Wrong Answer For The MFT</h3>
+      <p>Redis is a cache. The MFT is not a cache — it is the primary source of truth for where information lives. Treating it as a cache is a category error regardless of uptime guarantees. Redis down means TAG goes blind. Blind TAG means AXIOM falls back to naive search. The entire compounding advantage evaporates on an infrastructure failure you don't control. Vectorizing into an external vector DB has the same problem wearing different clothes.</p>
+      <p>The answer is that the index does not live in a database at all. The structural topology knowledge is encoded directly into the weights of a tiny neural network whose forward pass IS the lookup operation. The weights file is the index. The index lives nowhere else. It is a binary file you own completely. It lives on the same disk as the Python process. The forward pass is microseconds — a tiny MLP, 3-4 layers, query embedding in, routing vector out. No network. No external process. No failure surface outside your own disk.</p>
+    </div>
+
+    <div class="schema-block" style="border-left-color:var(--accent4)">
+      <pre><span class="cm"># tag/store/ — four files. everything TAG knows lives here.</span>
+
+topology_router.pt      <span class="cm"># tiny MLP weights — IS the index</span>
+                        <span class="cm"># query embedding → forward pass → routing vector</span>
+                        <span class="cm"># fine-tuned continuously by RL loop</span>
+                        <span class="cm"># gradient descent on surprise signal = index update</span>
+                        <span class="cm"># no bulk reindex. no rebuild. just training.</span>
+
+recipe_registry.mmap    <span class="cm"># memory-mapped binary — exact recipe lookup</span>
+                        <span class="cm"># recipes need exact recall not approximate</span>
+                        <span class="cm"># OS handles paging — access pattern looks like memory reads</span>
+                        <span class="cm"># file survives process death intact on disk</span>
+                        <span class="cm"># on restart: mmap same file, registry immediately available</span>
+
+phase_states.mmap       <span class="cm"># memory-mapped — per topology class phase tracking</span>
+                        <span class="cm"># which classes are Phase I, II, III</span>
+                        <span class="cm"># small, exact, survives restarts</span>
+
+structural_layer.pt     <span class="cm"># hivemind component — invariant primitive knowledge</span>
+                        <span class="cm"># same tiny MLP architecture as topology_router</span>
+                        <span class="cm"># federated via rsync — not Redis pub/sub, not a broker</span>
+                        <span class="cm"># a file sync. updated rarely. rsync is sufficient.</span>
+
+<span class="cm"># Restore path — called by TAG on startup if files are corrupted</span>
+<span class="cm"># restore.sh: extract latest checkpoint from /store/checkpoints/</span>
+<span class="cm"># worst case data loss: 15 minutes of RL training</span>
+<span class="cm"># restoration time: seconds</span></pre>
+    </div>
+
+    <div class="analogy-grid">
+      <div class="analogy-col">
+        <span class="sys" style="border-color:var(--red);color:var(--red)">WRONG APPROACH</span>
+        <h4>External Database</h4>
+        <p>Redis, Qdrant, Postgres — any external store introduces a network boundary, a failure surface, a service you have to trust. The MFT is the most critical knowledge in TAG. Putting it behind a network call is the architectural equivalent of storing your brain outside your skull.</p>
+      </div>
+      <div class="analogy-col">
+        <span class="sys" style="border-color:var(--accent4);color:var(--accent4)">CORRECT APPROACH</span>
+        <h4>Weights As Index</h4>
+        <p>The tiny MLP weights encode topology knowledge. The forward pass is the lookup. The file is the index. Approximate routing via neural forward pass. Exact recipe lookup via mmap'd binary. Two storage primitives, each used for what it is structurally suited to store.</p>
+      </div>
+      <div class="analogy-col">
+        <span class="sys" style="border-color:var(--green);color:var(--green)">RESILIENCE MODEL</span>
+        <h4>Four Files + Checkpoints</h4>
+        <p>Back up however you want. RAID them. Checkpoint them every 15 minutes via Alpine crond. Restore from any checkpoint in seconds. Copy the four files to a new machine and TAG has its full compiled knowledge immediately. Portable. Owned. No external dependency.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- TAG MACROSERVICE -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">Service Architecture — TAG Is A Macroservice</span>
+    <div class="sec-title">WLM and WLP Are Internal Modules. The Kernel Is A Subprocess. AXIOM Sees One Thing.</div>
+
+    <div class="rule-box" style="border-color:var(--accent4);background:rgba(224,122,255,0.04)">
+      <div class="rb-icon" style="color:var(--accent4)">◈</div>
+      <div class="rb-text">WLM and WLP are tightly coupled — WLM produces topology classes, WLP reads them to compile recipes, WLP's recipe quality feeds back into WLM's training signal, the MFT is written by WLM and read by WLP on every recipe compilation. Splitting them into microservices means the MFT leaves process memory and lives in Redis — a network round trip on the most latency-sensitive path in the system to achieve a separation that doesn't reflect the actual coupling. The kernel is already a process boundary. Making it a network service puts HTTP overhead around a grep call that runs in microseconds. That directly defeats the reason the kernel exists. TAG presents one interface to AXIOM. Everything behind it is invisible.</div>
+    </div>
+
+    <div class="schema-block" style="border-left-color:var(--accent4)">
+      <pre><span class="cm"># tag/ — one macroservice. AXIOM touches only interface.py.</span>
+
+tag/
+    daemon/
+        world_model.py       <span class="cm"># WLM — RL machinery, phase management, always-on</span>
+        mft.py               <span class="cm"># master index, USN journal, in-process memory</span>
+        surprise_detector.py <span class="cm"># prediction error monitoring, loss function</span>
+        hivemind.py          <span class="cm"># background thread, rsync to fleet — NOT Redis</span>
+    parser/
+        topology_classifier.py  <span class="cm"># WLP — class identification from DOM/JSON</span>
+        critical_path.py        <span class="cm"># on/off zone learning per topology class</span>
+        recipe_compiler.py      <span class="cm"># grep pipeline assembly</span>
+        recipe_registry.py      <span class="cm"># per-class recipe store → recipe_registry.mmap</span>
+    kernel/
+        pipeline.py          <span class="cm"># manages Alpine subprocess lifecycle</span>
+        Dockerfile           <span class="cm"># Process 1 + Process 2 — grep + crond</span>
+        feedback.py          <span class="cm"># extraction quality back to parser</span>
+        checkpoint/
+            mft_checkpoint.sh   <span class="cm"># crond job — 15min, 48 checkpoint rotation</span>
+            restore.sh          <span class="cm"># called by TAG on startup if needed</span>
+    store/
+        topology_router.pt      <span class="cm"># tiny MLP weights — the index</span>
+        recipe_registry.mmap    <span class="cm"># exact recipe lookup</span>
+        phase_states.mmap       <span class="cm"># per-class phase tracking</span>
+        structural_layer.pt     <span class="cm"># hivemind shared weights</span>
+        checkpoints/            <span class="cm"># 12 hours of rotating snapshots</span>
+    interface.py             <span class="cm"># DaemonQuery → DaemonResponse. AXIOM stops here.</span></pre>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- FULL CLOSED LOOP -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">Complete Closed Loop — Query To Snapshot</span>
+    <div class="sec-title">Every Step. Two Clocks. Three Processes. One System.</div>
+
+    <div class="rule-box">
+      <div class="rb-icon">◈</div>
+      <div class="rb-text">The checkpoint is not at the end of the query. The checkpoint is on its own 15-minute clock entirely independent of query volume. The loop from query to outcome closes in milliseconds to seconds. The loop from outcome to durable snapshot closes on the crond schedule. The RL training loop runs continuously in the background across all of them. <strong style="color:var(--text-bright)">Three clocks. Different cadences. Neither blocks the other.</strong></div>
+    </div>
+
+    <div class="loop-container" style="padding:40px 32px">
+      <div class="loop-diagram">
+
+        <div class="loop-row">
+          <div class="loop-node n-amber" style="min-width:260px">
+            <span class="n-id">QUERY ARRIVES</span>
+            <span class="n-name">AxiomState + IntentVector</span>
+            <span class="n-sub">from AXIOM controller via interface.py</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-gold" style="min-width:260px">
+            <span class="n-id">TOPOLOGY CLASSIFIER</span>
+            <span class="n-name">MLP FORWARD PASS</span>
+            <span class="n-sub">topology_router.pt — microseconds, in-process memory</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row" style="justify-content:center">
+          <div class="cond-label">CONDITIONAL: MFT HIT or MISS</div>
+        </div>
+
+        <div class="split-row" style="margin:16px 0">
+          <div class="split-branch">
+            <span class="branch-label bl-yes">HIT — PHASE III KNOWN</span>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-green" style="min-width:200px">
+              <span class="n-id">MFT QUERY</span>
+              <span class="n-name">DIRECT ROUTING</span>
+              <span class="n-sub">recipe_registry.mmap — O(1) lookup</span>
+            </div>
+          </div>
+          <div class="split-branch">
+            <span class="branch-label bl-no">MISS — PHASE I / II</span>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-orange" style="min-width:200px">
+              <span class="n-id">LATENT SIMULATION</span>
+              <span class="n-name">WORLD MODEL</span>
+              <span class="n-sub">world_model.py — simulate trajectories</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-amber" style="min-width:260px">
+            <span class="n-id">PARAMETER POLICY</span>
+            <span class="n-name">DaemonResponse</span>
+            <span class="n-sub">traversal config + source priority + friction forecast + recipe</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-orange" style="min-width:260px">
+            <span class="n-id">PHANTOM</span>
+            <span class="n-name">LIVE TRAVERSAL</span>
+            <span class="n-sub">Playwright / httpx — render mode already decided</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row" style="gap:0">
+          <div class="loop-node n-warm" style="min-width:220px">
+            <span class="n-id">SIGNAL KERNEL P1</span>
+            <span class="n-name">grep PIPELINE</span>
+            <span class="n-sub">raw HTML → run.sh → clean signal text</span>
+          </div>
+          <div class="arr-right"></div>
+          <div class="loop-node n-purple" style="min-width:220px">
+            <span class="n-id">SANITIZER</span>
+            <span class="n-name">LAST MILE STRIP</span>
+            <span class="n-sub">sanitize.py → confirmed clean signal</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-green" style="min-width:260px">
+            <span class="n-id">SEMANTIC EXTRACTOR</span>
+            <span class="n-name">HAIKU — SIGNAL ONLY</span>
+            <span class="n-sub">60-80% token reduction vs raw HTML input</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-amber" style="min-width:260px">
+            <span class="n-id">OUTCOME CAPTURE</span>
+            <span class="n-name">feedback.py</span>
+            <span class="n-sub">coverage delta · avoidance events · signal quality</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-purple" style="min-width:260px">
+            <span class="n-id">SURPRISE DETECTOR</span>
+            <span class="n-name">PREDICTION ERROR</span>
+            <span class="n-sub">surprise_detector.py — actual vs predicted vs θ_surprise</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row" style="justify-content:center">
+          <div class="cond-label">CONDITIONAL: SURPRISE HIGH or LOW</div>
+        </div>
+
+        <div class="split-row" style="margin:16px 0">
+          <div class="split-branch">
+            <span class="branch-label bl-yes">LOW — UPDATE WEIGHTS</span>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-green" style="min-width:200px">
+              <span class="n-id">INCREMENTAL TRAIN</span>
+              <span class="n-name">GRADIENT STEP</span>
+              <span class="n-sub">topology_router.pt updated in-place</span>
+            </div>
+            <div class="arr-down" style="height:16px"></div>
+            <div class="loop-node n-green" style="min-width:200px">
+              <span class="n-id">USN JOURNAL</span>
+              <span class="n-name">DIFF WRITTEN</span>
+              <span class="n-sub">phase_states.mmap updated</span>
+            </div>
+          </div>
+          <div class="split-branch">
+            <span class="branch-label bl-no">HIGH — DISSOLVE + RELEARN</span>
+            <div class="arr-down" style="height:20px"></div>
+            <div class="loop-node n-red" style="min-width:200px">
+              <span class="n-id">PHASE DISSOLVE</span>
+              <span class="n-name">III → II</span>
+              <span class="n-sub">compiled policy dropped for this class</span>
+            </div>
+            <div class="arr-down" style="height:16px"></div>
+            <div class="loop-node n-orange" style="min-width:200px">
+              <span class="n-id">HIVEMIND CHECK</span>
+              <span class="n-name">NEW PRIMITIVE?</span>
+              <span class="n-sub">structural_layer.pt + rsync to fleet</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-warm" style="min-width:260px">
+            <span class="n-id">SIGNAL KERNEL P2</span>
+            <span class="n-name">crond — INDEPENDENT CLOCK</span>
+            <span class="n-sub">fires every 15min regardless of query volume</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-gold" style="min-width:260px">
+            <span class="n-id">CHECKPOINT WRITTEN</span>
+            <span class="n-name">mft_[timestamp].tar.gz</span>
+            <span class="n-sub">/store/checkpoints/ — 48 rotating, 12hr history, zero network</span>
+          </div>
+        </div>
+        <div class="arr-down"></div>
+
+        <div class="loop-row">
+          <div class="loop-node n-amber" style="min-width:260px">
+            <span class="n-id">LOOP CLOSES</span>
+            <span class="n-name">DAEMON CONTINUES</span>
+            <span class="n-sub">next query arrives — MFT slightly smarter than last time</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <p style="font-size:11px;color:var(--text-dim);margin-top:20px;line-height:1.75">The query loop closes in milliseconds to seconds. The checkpoint loop closes every 15 minutes. The RL training loop runs continuously in the background across both. The daemon never terminates. Every run tightens the loop. Phase III classes grow. Live traversal becomes rarer. grep recipes become sharper. Token cost compounds downward. The index never stops learning and it never loses more than 15 minutes of learning to any failure.</p>
+  </section>
+
+  <hr class="div">
+
+  <!-- COST + INNOVATIONS -->
+  <section style="margin-bottom:64px">
+    <span class="sec-label">What This Changes</span>
+    <div class="sec-title">Why This Is Different From Everything Existing</div>
+
+    <div class="innov-grid">
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent)">01</div>
+        <div class="innov-title">The First TAG System — Topology-Addressed Generation</div>
+        <div class="innov-desc">RAG searches. TAG addresses. The query is matched to a structural address in a pre-built index — not to a corpus via nearest-neighbor search. FAISS computes cosine similarity between millions of vectors from scratch every time. TAG's MFT resolves a topology class to a structural address. O(1) lookup vs O(n) search. Not a better RAG. A different paradigm.</div>
+        <div class="innov-tag">TOPOLOGY-ADDRESSED GENERATION</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent3)">02</div>
+        <div class="innov-title">Index Encoded In Weights — No External Store</div>
+        <div class="innov-desc">The MFT is not stored in Redis or any vector database. It is encoded in the weights of a tiny MLP whose forward pass IS the lookup operation. Fine-tuning is the index update. The file is the index. Four files, owned completely, checkpointed every 15 minutes by Alpine crond. No external dependency. No trust required. No failure surface outside your own disk.</div>
+        <div class="innov-tag">WEIGHTS AS INDEX</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent2)">03</div>
+        <div class="innov-title">grep Runs At Memory Bandwidth. LLMs Do Not.</div>
+        <div class="innov-desc">Structural noise removal is a pattern matching problem. grep was built for this, in C, at memory bandwidth. Routing it to an LLM is architectural waste. The kernel costs zero tokens and runs in milliseconds. The recipe is compiled once per topology class. Execution is free. Token reduction on a typical news article: 60-80%. Compounds across every URL in every run.</div>
+        <div class="innov-tag">SIGNAL KERNEL</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent4)">04</div>
+        <div class="innov-title">Satellite + Streets — Dual-Level World Model</div>
+        <div class="innov-desc">The World Latent Model sees the web from above — topology classes, structural primitives, site compositions. The World Latent Parser runs the streets — which DOM zones contain signal, which contain noise, what every web page shares structurally. Neither alone is sufficient. Together they give TAG a complete two-level mental model of the information landscape.</div>
+        <div class="innov-tag">DUAL-LEVEL WORLD MODEL</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--green)">05</div>
+        <div class="innov-title">Compounding Moat — Widens Automatically</div>
+        <div class="innov-desc">Every other RAG starts every run equally naive. After 10,000 runs TAG is not searching the web anymore — it is navigating a map it built itself. The gap widens with every single run, automatically, without code changes, without human intervention. The moat is not the architecture. The moat is the accumulated index the architecture produces.</div>
+        <div class="innov-tag">COMPOUNDING INTELLIGENCE</div>
+      </div>
+      <div class="innov-card">
+        <div class="innov-n" style="color:var(--accent5)">06</div>
+        <div class="innov-title">Three Boring Names. One Novel Architecture.</div>
+        <div class="innov-desc"><code style="font-size:10px;color:var(--accent3);background:var(--surface2);padding:1px 5px;border:1px solid var(--border)">index_daemon.py</code> — looks like a background indexer. <code style="font-size:10px;color:var(--accent3);background:var(--surface2);padding:1px 5px;border:1px solid var(--border)">topology_parser.py</code> — looks like a utility parser. <code style="font-size:10px;color:var(--accent3);background:var(--surface2);padding:1px 5px;border:1px solid var(--border)">signal_kernel/</code> — looks like an infra artifact. Nobody reads infra files. The most architecturally significant trio has the three most boring names. Intentional. Load-bearing.</div>
+        <div class="innov-tag">INVISIBLE BY DESIGN</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="sweep"></div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-left">
+      AXIOM — Core Searching Algorithm Specification v0.3<br>
+      TAG not RAG. Weights as index. Kernel has two processes. Loop closes every 15 minutes.<br>
+      <span style="color:var(--accent)">index_daemon.py // topology_parser.py // signal_kernel/ // interface.py</span>
+    </div>
+    <div class="footer-right">
+      TOPOLOGY-ADDRESSED GENERATION // MFT IN WEIGHTS<br>
+      ALPINE CHECKPOINT // HIVEMIND RSYNC // TAG MACROSERVICE<br>
+      AXIOM INTERNAL // DO NOT SURFACE
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
