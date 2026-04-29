@@ -1686,13 +1686,10 @@ def _format_clean_result(response: InterfaceResponse, elapsed_s: float) -> str:
 
 def _silence_all_loggers() -> None:
     """Redirect stderr to devnull — kills ALL debug noise unconditionally."""
-    import logging as _logging
     import sys
-    # structlog writes directly to stderr, ignoring logging.disable().
-    # Only way to guarantee silence: redirect stderr itself.
-    # Clean JSON output uses print() → stdout, so it's unaffected.
+    # structlog, sanitizer, bus, pipeline — all write to stderr.
+    # Clean JSON output uses print() → stdout, unaffected.
     sys.stderr = open(os.devnull, "w")
-    _logging.disable(_logging.INFO)
 
 
 async def serve_stdio() -> int:

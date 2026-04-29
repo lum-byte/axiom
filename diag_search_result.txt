@@ -1,0 +1,5 @@
+STATUS: ok
+MESSAGE: AXIOM routed 'what is google' through 17 learned source(s), but extracted 0 ranked blocks.
+SOURCES: 17
+CACHED_DOCS: 0
+RANKED_BLOCKS: 0
