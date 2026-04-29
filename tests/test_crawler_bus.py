@@ -280,6 +280,72 @@ class StoreHealthEvent:
     run_id: str
 
 
+@dataclass(frozen=True)
+class SnapshotCandidateEvent:
+    url: str
+    reason: str
+    relevance_score: float
+    source_component: str
+    run_id: str
+    query: str = ""
+    topology_class: str = "GENERIC_HTML"
+    rank: int = 0
+    ttl_seconds: int = 3600
+    candidate_at: str = ""
+
+
+@dataclass(frozen=True)
+class SnapshotCapturedEvent:
+    url: str
+    artifact_path: str
+    artifact_kind: str
+    sha256: str
+    byte_count: int
+    watermark: str
+    source_tool: str
+    run_id: str
+    metadata: Optional[Dict[str, Any]] = None
+    captured_at: str = ""
+    expires_at: str = ""
+
+
+@dataclass(frozen=True)
+class ToolHealthEvent:
+    tool_name: str
+    status: str
+    dependency_status: Optional[Dict[str, bool]] = None
+    permission_class: str = "read_only"
+    adapter_kind: str = "stub"
+    run_id: str = ""
+    detail: str = ""
+    checked_at: str = ""
+
+
+@dataclass(frozen=True)
+class ToolInvocationEvent:
+    tool_name: str
+    invocation_id: str
+    input_hash: str
+    run_id: str
+    source_component: str
+    mode: str = "selective"
+    permission_class: str = "read_only"
+    started_at: str = ""
+
+
+@dataclass(frozen=True)
+class ToolResultEvent:
+    tool_name: str
+    invocation_id: str
+    status: str
+    output_hash: str
+    duration_ms: float
+    run_id: str
+    output_summary: str = ""
+    error_type: Optional[str] = None
+    completed_at: str = ""
+
+
 # ── Minimal exception hierarchy ───────────────────────────────────────────────
 
 class TopologyException(Exception):
@@ -337,6 +403,13 @@ def _build_stubs() -> None:
     contracts_mod.StoreHealthEvent         = StoreHealthEvent        # type: ignore[attr-defined]
     contracts_mod.FeedbackEvent            = FeedbackEvent           # type: ignore[attr-defined]
     contracts_mod.PhaseTransitionEvent     = PhaseTransitionEvent    # type: ignore[attr-defined]
+    contracts_mod.SnapshotCandidateEvent   = SnapshotCandidateEvent  # type: ignore[attr-defined]
+    contracts_mod.SnapshotCapturedEvent    = SnapshotCapturedEvent   # type: ignore[attr-defined]
+    contracts_mod.ToolHealthEvent          = ToolHealthEvent         # type: ignore[attr-defined]
+    contracts_mod.ToolInvocationEvent      = ToolInvocationEvent     # type: ignore[attr-defined]
+    contracts_mod.ToolResultEvent          = ToolResultEvent         # type: ignore[attr-defined]
+    contracts_mod.FALLBACK_TOPOLOGY_CLASS  = "GENERIC_HTML"          # type: ignore[attr-defined]
+    contracts_mod.new_run_id              = lambda: str(uuid.uuid4())  # type: ignore[attr-defined]
 
     exceptions_mod = types.ModuleType("signal_kernel.exceptions")
     exceptions_mod.EventBusSubscriptionError = EventBusSubscriptionError # type: ignore[attr-defined]
@@ -762,7 +835,7 @@ class TestTopicRegistry:
 
 class TestTopicRegistryGlobal:
     def test_all_contract_topics_registered(self):
-        assert len(TOPIC_REGISTRY) == 20
+        assert len(TOPIC_REGISTRY) == 25
 
     def test_expected_topics_present(self):
         expected = {
@@ -771,7 +844,8 @@ class TestTopicRegistryGlobal:
             "manifest_complete", "cl_state_update", "container_breach",
             "zone_map_updated", "zone_map_invalidated", "surprise",
             "recipe_stale", "recipe_health", "weights_updated", "store_health",
-            "feedback", "phase_transition",
+            "snapshot_candidate", "snapshot_captured", "tool_invocation",
+            "tool_result", "tool_health", "feedback", "phase_transition",
         }
         assert set(TOPIC_REGISTRY.keys()) == expected
 

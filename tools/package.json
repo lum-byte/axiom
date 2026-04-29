@@ -1,0 +1,27 @@
+{
+  "name": "@axiom/tools-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AXIOM-owned SDK facade and JSONL bridge for adopted tools.",
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc -p ../swarm/tsconfig.axiom.json --noEmit",
+    "build": "tsc -p tsconfig.json && tsc -p ../swarm/tsconfig.axiom.json",
+    "sidecar": "node dist/axiom-sdk/sidecar.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.55.0",
+    "ajv": "^8.17.1",
+    "axios": "^1.7.9",
+    "diff": "^5.2.0",
+    "figures": "^6.1.0",
+    "lodash-es": "^4.17.21",
+    "lru-cache": "^11.0.2",
+    "react": "^19.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

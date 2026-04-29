@@ -145,8 +145,13 @@ from signal_kernel.contracts import (
     RecipeHealthEvent,
     RecipeStaleEvent,
     SignalExtractedEvent,
+    SnapshotCandidateEvent,
+    SnapshotCapturedEvent,
     StoreHealthEvent,
     SurpriseEvent,
+    ToolHealthEvent,
+    ToolInvocationEvent,
+    ToolResultEvent,
     WeightsUpdatedEvent,
     ZoneMapUpdatedEvent,
     ZoneMapInvalidatedEvent,
@@ -200,7 +205,7 @@ _DEFAULT_CLIENT_CERT: str = "/certs/client.crt"
 _DEFAULT_CLIENT_KEY:  str = "/certs/client.key"
 
 # Dead letter store. Created by cold_start.py before bus.start() is called.
-_DEAD_LETTER_PATH: Path = Path("/store/dead_letters.jsonl")
+_DEAD_LETTER_PATH: Path = Path(os.environ.get("AXIOM_DEAD_LETTER_PATH", "/store/dead_letters.jsonl"))
 
 # Kafka producer settings — tuned for throughput with bounded latency.
 _KAFKA_LINGER_MS:       int = 10          # batch for 10 ms before sending
@@ -746,6 +751,11 @@ TOPIC_REGISTRY: Dict[str, Type[Any]] = {
     "recipe_health":      RecipeHealthEvent,
     "weights_updated":    WeightsUpdatedEvent,
     "store_health":       StoreHealthEvent,
+    "snapshot_candidate": SnapshotCandidateEvent,
+    "snapshot_captured":  SnapshotCapturedEvent,
+    "tool_invocation":    ToolInvocationEvent,
+    "tool_result":        ToolResultEvent,
+    "tool_health":        ToolHealthEvent,
     "feedback":           FeedbackBusEvent,
     "phase_transition":   PhaseTransitionEvent,
 }
@@ -3634,7 +3644,7 @@ class EventEnvelopeValidator:
 # This is the forensic-grade audit log for the bus coordinator.
 # ═════════════════════════════════════════════════════════════════════════════
 
-_BUS_EVENT_LOG_PATH: Path = Path("/store/bus_events.log")
+_BUS_EVENT_LOG_PATH: Path = Path(os.environ.get("AXIOM_BUS_EVENT_LOG_PATH", "/store/bus_events.log"))
 
 # Maximum size of the bus event log before rotation (10 MB).
 _BUS_EVENT_LOG_MAX_BYTES: int = 10 * 1024 * 1024
@@ -4534,6 +4544,68 @@ TOPIC_DOCUMENTATION: Dict[str, TopicDoc] = {
         ),
         is_high_volume=False,
     ),
+    "snapshot_candidate": TopicDoc(
+        topic="snapshot_candidate",
+        schema_class="SnapshotCandidateEvent",
+        producer="tag/tools_bridge.py",
+        consumers=("tag/tools_bridge.py", "index_daemon.py"),
+        partition_key="url",
+        description=(
+            "A URL already selected by AXIOM routing or crawler traversal as "
+            "relevant enough for temporary artifact capture. This is not an "
+            "external search-engine result."
+        ),
+        is_high_volume=True,
+    ),
+    "snapshot_captured": TopicDoc(
+        topic="snapshot_captured",
+        schema_class="SnapshotCapturedEvent",
+        producer="tag/tools_bridge.py",
+        consumers=("index_daemon.py", "cold_start.py"),
+        partition_key="url",
+        description=(
+            "Metadata for a temporary snapshot artifact captured by the tools "
+            "bridge. Artifacts live outside the four durable store files and "
+            "carry AXIOM provenance watermarks."
+        ),
+        is_high_volume=True,
+    ),
+    "tool_invocation": TopicDoc(
+        topic="tool_invocation",
+        schema_class="ToolInvocationEvent",
+        producer="tag/tools_bridge.py",
+        consumers=("index_daemon.py", "cold_start.py"),
+        partition_key="tool_name",
+        description=(
+            "Audit record emitted before invoking a registered tools/ adapter "
+            "through the AXIOM SDK compatibility layer."
+        ),
+        is_high_volume=True,
+    ),
+    "tool_result": TopicDoc(
+        topic="tool_result",
+        schema_class="ToolResultEvent",
+        producer="tag/tools_bridge.py",
+        consumers=("index_daemon.py", "cold_start.py"),
+        partition_key="tool_name",
+        description=(
+            "Result record emitted after a tool adapter finishes, including "
+            "status, duration, and output hash."
+        ),
+        is_high_volume=True,
+    ),
+    "tool_health": TopicDoc(
+        topic="tool_health",
+        schema_class="ToolHealthEvent",
+        producer="tag/tools_bridge.py",
+        consumers=("cold_start.py", "index_daemon.py"),
+        partition_key="tool_name",
+        description=(
+            "Dependency and capability health for one registered tools/ "
+            "adapter. Stub tools are reported explicitly instead of hidden."
+        ),
+        is_high_volume=False,
+    ),
     "feedback": TopicDoc(
         topic="feedback",
         schema_class="FeedbackEvent",
@@ -4612,6 +4684,11 @@ __all__ += [
     "RecipeHealthEvent",
     "WeightsUpdatedEvent",
     "StoreHealthEvent",
+    "SnapshotCandidateEvent",
+    "SnapshotCapturedEvent",
+    "ToolInvocationEvent",
+    "ToolResultEvent",
+    "ToolHealthEvent",
     "SurpriseEvent",
     "ZoneMapUpdatedEvent",
     "ZoneMapInvalidatedEvent",

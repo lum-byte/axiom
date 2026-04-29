@@ -8,6 +8,13 @@ EXTENSIONS = (
     ".md",
     ".toml",
     ".ini"
+    ".ts",
+    ".tsx",
+    ".js",
+    ".c",
+    ".cu",
+    ".go",
+    ".h",
 )
 
 EXCLUDE_DIRS = {

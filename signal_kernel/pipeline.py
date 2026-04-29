@@ -48,6 +48,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import signal # noqa
 import time
 from contextlib import contextmanager # noqa
@@ -182,6 +183,15 @@ _CHARS_PER_TOKEN: int = 4
 _WARM_CONTAINER_MAX_IDLE_SECONDS: float = 300.0
 
 
+def _default_shell_executable() -> str:
+    configured = os.environ.get("AXIOM_SHELL_EXECUTABLE")
+    if configured:
+        return configured
+    if os.name == "nt":
+        return shutil.which("sh") or shutil.which("bash") or "/bin/sh"
+    return "/bin/sh"
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # PIPELINE CONFIGURATION
 #
@@ -209,7 +219,7 @@ class PipelineConfig:
     force_kill_reap_timeout_s: float = _FORCE_KILL_REAP_TIMEOUT_SECONDS
     stderr_retain_limit:   int = _STDERR_RETAIN_LIMIT_BYTES
     warm_container_max_idle_s: float = _WARM_CONTAINER_MAX_IDLE_SECONDS
-    shell_executable:      str = "/bin/sh"
+    shell_executable:      str = field(default_factory=_default_shell_executable)
 
     def __post_init__(self) -> None:
         if self.subprocess_timeout_ms < 100:

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-04-28T18:45:59.301900+00:00",
+  "generator": "signal_kernel/recipes/registry.py",
+  "entries": {
+    "NEWS_ARTICLE": {
+      "recipe_filename": "news_article.sh",
+      "recipe_hash": "603f983efccca0f61e281701ca4d43e158f89807cbc6aff7336642ab57da7382",
+      "line_count": 2,
+      "committed_at": "2026-04-28T18:45:59.301422+00:00"
+    },
+    "SAAS_DOCS": {
+      "recipe_filename": "saas_docs.sh",
+      "recipe_hash": "6330a05a45177917999d2607c492ef674a69a67f0a58ca92c23bee6aa53f27bf",
+      "line_count": 88,
+      "committed_at": "2026-04-28T18:45:59.301422+00:00"
+    },
+    "REST_API_JSON": {
+      "recipe_filename": "rest_api_json.sh",
+      "recipe_hash": "c83a51745a1cf38afce04c315818f87b198f8ac58911d1ea3f67dc8c79977bfc",
+      "line_count": 83,
+      "committed_at": "2026-04-28T18:45:59.301422+00:00"
+    },
+    "JSON_LD_STRUCTURED": {
+      "recipe_filename": "json_ld.sh",
+      "recipe_hash": "59aa564749c6527d860d03b0af760c673fb45a668788ebc9707533306fe43f39",
+      "line_count": 41,
+      "committed_at": "2026-04-28T18:45:59.301422+00:00"
+    },
+    "ECOMMERCE_PRODUCT": {
+      "recipe_filename": "ecommerce.sh",
+      "recipe_hash": "65ababbaffa7f9d73cd23a305ff078fe1999e72126dcd83374021617770ff6a8",
+      "line_count": 90,
+      "committed_at": "2026-04-28T18:45:59.301422+00:00"
+    },
+    "GENERIC_HTML": {
+      "recipe_filename": "generic_html.sh",
+      "recipe_hash": "3eee164b475a9165eadc2cdb100bd333f99e2d944db9f5ada6c7fa5f07ed2bbd",
+      "line_count": 49,
+      "committed_at": "2026-04-28T18:45:59.301422+00:00"
+    }
+  }
+}

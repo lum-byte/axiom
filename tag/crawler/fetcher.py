@@ -4446,9 +4446,8 @@ class Fetcher:
         # 5. Frontier
         if self._frontier is None and Frontier is not None:
             self._frontier = Frontier(
-                db_path=self._store_dir / "frontier.db",
                 cursor=self._cursor,
-                bloom=self._bloom,
+                db_path=self._store_dir / "frontier.db",
             )
             await self._frontier.initialize()
             log.info("fetcher: frontier ready")
@@ -4536,6 +4535,7 @@ class Fetcher:
         if cleaned > 0:
             log.info("fetcher: cleaned %d staging files", cleaned)
 
+        await asyncio.sleep(0.25)
         self._initialized = False
         log.info(
             "fetcher: SHUTDOWN — %d total URLs processed",

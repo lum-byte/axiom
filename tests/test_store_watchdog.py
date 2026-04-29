@@ -40,7 +40,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple, cast
 from unittest.mock import AsyncMock, MagicMock, patch, call # noqa
-import inotify_simple
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MOCK EXTERNAL DEPENDENCIES
@@ -91,6 +90,7 @@ class _FakeFlags:
 
 _fake_inotify_module.flags = _FakeFlags()
 sys.modules["inotify_simple"] = _fake_inotify_module
+import inotify_simple
 
 # ── signal_kernel.contracts ───────────────────────────────────────────────────
 # The health dataclasses are defined locally in store_watchdog.py and shadow
@@ -123,10 +123,9 @@ _fake_contracts.WatchdogHandlerHealth = _FakeWatchdogHandlerHealth
 _fake_contracts.WatchdogPathHealth    = _FakeWatchdogPathHealth
 _fake_contracts.WatchdogHealth        = _FakeWatchdogHealth
 
-_fake_signal_kernel            = types.ModuleType("signal_kernel")
-_fake_signal_kernel.contracts  = _fake_contracts
-sys.modules["signal_kernel"]            = _fake_signal_kernel
-sys.modules["signal_kernel.contracts"]  = _fake_contracts
+# Use the real signal_kernel package. Earlier versions of this test replaced
+# signal_kernel in sys.modules, which leaks across full-suite collection and
+# hides the canonical contracts added at the bus seam.
 
 # ── structlog ─────────────────────────────────────────────────────────────────
 

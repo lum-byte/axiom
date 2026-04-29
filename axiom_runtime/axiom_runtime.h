@@ -1,0 +1,32 @@
+#ifndef AXIOM_RUNTIME_H
+#define AXIOM_RUNTIME_H
+
+#include <stddef.h>
+
+#ifdef _WIN32
+#  ifdef AXIOM_RUNTIME_BUILD
+#    define AXIOM_API __declspec(dllexport)
+#  else
+#    define AXIOM_API __declspec(dllimport)
+#  endif
+#else
+#  define AXIOM_API __attribute__((visibility("default")))
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct axiom_runtime axiom_runtime;
+
+AXIOM_API const char *axiom_version(void);
+AXIOM_API axiom_runtime *axiom_init(const char *config_json);
+AXIOM_API char *axiom_handle_json(axiom_runtime *runtime, const char *request_json);
+AXIOM_API void axiom_free(char *ptr);
+AXIOM_API void axiom_shutdown(axiom_runtime *runtime);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

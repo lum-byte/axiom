@@ -64,7 +64,7 @@ type FetchRecord struct {
 	LatencyMS       float64           `json:"latency_ms"`
 	RedirectCount   int               `json:"redirect_count"`
 	RobotsDenied    bool              `json:"robots_denied"`
-	FetchedAtUnix    int64             `json:"fetched_at_unix"`
+	FetchedAtUnix   int64             `json:"fetched_at_unix"`
 	TopologyHint    string            `json:"topology_hint"`
 	Headers         map[string]string `json:"headers"`
 }
@@ -110,8 +110,8 @@ type OnlineStats struct {
 type FetchHealthSummary struct {
 	Total               int               `json:"total"`
 	Success             int               `json:"success"`
-	ClientErrors         int               `json:"client_errors"`
-	ServerErrors         int               `json:"server_errors"`
+	ClientErrors        int               `json:"client_errors"`
+	ServerErrors        int               `json:"server_errors"`
 	Redirects           int               `json:"redirects"`
 	RobotsDenied        int               `json:"robots_denied"`
 	ByStatusClass       map[string]int    `json:"by_status_class"`
@@ -125,28 +125,28 @@ type FetchHealthSummary struct {
 }
 
 type DomainFingerprint struct {
-	Domain                    string             `json:"domain"`
-	TopologyClass             string             `json:"topology_class"`
-	TopologyDistribution      map[string]float64 `json:"topology_distribution"`
-	URLPatterns               []URLPattern       `json:"url_patterns"`
-	RobotsSignals             RobotsAnalysis     `json:"robots_signals"`
-	ContentLanguage           string             `json:"content_language"`
-	AvgResponseSize           int64              `json:"avg_response_size"`
-	AvgLatencyMS              float64            `json:"avg_latency_ms"`
-	SizeStats                 OnlineStats        `json:"size_stats"`
-	LatencyStats              OnlineStats        `json:"latency_stats"`
-	Health                    FetchHealthSummary `json:"health"`
-	PhaseRecommendation       string             `json:"phase_recommendation"`
-	FrictionLevel             int                `json:"friction_level"`
-	Confidence                float64            `json:"confidence"`
-	ObservationCount          int                `json:"observation_count"`
-	ObservedPathCount         int                `json:"observed_path_count"`
-	SignalDensity             float64            `json:"signal_density"`
-	FreshnessHalfLifeDays      float64            `json:"freshness_half_life_days"`
-	FingerprintSHA256         string             `json:"fingerprint_sha256"`
-	FingerprintSlot           []byte             `json:"fingerprint_slot"`
-	AnalyzedAtUnix            int64              `json:"analyzed_at_unix"`
-	RunID                     string             `json:"run_id"`
+	Domain                string             `json:"domain"`
+	TopologyClass         string             `json:"topology_class"`
+	TopologyDistribution  map[string]float64 `json:"topology_distribution"`
+	URLPatterns           []URLPattern       `json:"url_patterns"`
+	RobotsSignals         RobotsAnalysis     `json:"robots_signals"`
+	ContentLanguage       string             `json:"content_language"`
+	AvgResponseSize       int64              `json:"avg_response_size"`
+	AvgLatencyMS          float64            `json:"avg_latency_ms"`
+	SizeStats             OnlineStats        `json:"size_stats"`
+	LatencyStats          OnlineStats        `json:"latency_stats"`
+	Health                FetchHealthSummary `json:"health"`
+	PhaseRecommendation   string             `json:"phase_recommendation"`
+	FrictionLevel         int                `json:"friction_level"`
+	Confidence            float64            `json:"confidence"`
+	ObservationCount      int                `json:"observation_count"`
+	ObservedPathCount     int                `json:"observed_path_count"`
+	SignalDensity         float64            `json:"signal_density"`
+	FreshnessHalfLifeDays float64            `json:"freshness_half_life_days"`
+	FingerprintSHA256     string             `json:"fingerprint_sha256"`
+	FingerprintSlot       []byte             `json:"fingerprint_slot"`
+	AnalyzedAtUnix        int64              `json:"analyzed_at_unix"`
+	RunID                 string             `json:"run_id"`
 }
 
 type RecordValidationIssue struct {
@@ -209,11 +209,72 @@ type LearningHint struct {
 }
 
 type FingerprintValidationReport struct {
-	Valid      bool     `json:"valid"`
-	Errors     []string `json:"errors"`
-	Warnings   []string `json:"warnings"`
-	Domain     string   `json:"domain"`
+	Valid       bool     `json:"valid"`
+	Errors      []string `json:"errors"`
+	Warnings    []string `json:"warnings"`
+	Domain      string   `json:"domain"`
 	HashPresent bool     `json:"hash_present"`
+}
+
+type RobotsPathDecision struct {
+	Path          string `json:"path"`
+	Allowed       bool   `json:"allowed"`
+	MatchedRule   string `json:"matched_rule"`
+	MatchedLine   int    `json:"matched_line"`
+	Directive     string `json:"directive"`
+	FrictionLevel int    `json:"friction_level"`
+	Reason        string `json:"reason"`
+}
+
+type HeaderSignals struct {
+	ContentType         string            `json:"content_type"`
+	ContentFamily       string            `json:"content_family"`
+	ContentLanguage     string            `json:"content_language"`
+	CachePolicy         string            `json:"cache_policy"`
+	ServerFamily        string            `json:"server_family"`
+	HasSecurityHeaders  bool              `json:"has_security_headers"`
+	SecurityHeaderScore float64           `json:"security_header_score"`
+	Compression         string            `json:"compression"`
+	FrameworkHint       string            `json:"framework_hint"`
+	HeaderCount         int               `json:"header_count"`
+	NormalizedHeaders   map[string]string `json:"normalized_headers"`
+}
+
+type DomainCohortSummary struct {
+	TotalDomains          int               `json:"total_domains"`
+	ByTopology            map[string]int    `json:"by_topology"`
+	ByPhase               map[string]int    `json:"by_phase"`
+	ByFriction            map[int]int       `json:"by_friction"`
+	MeanConfidence        float64           `json:"mean_confidence"`
+	MeanSignalDensity     float64           `json:"mean_signal_density"`
+	HighestConfidence     []string          `json:"highest_confidence"`
+	RefreshRecommended    []string          `json:"refresh_recommended"`
+	RepresentativeByClass map[string]string `json:"representative_by_class"`
+	FingerprintHashes     map[string]string `json:"fingerprint_hashes"`
+	Warnings              []string          `json:"warnings"`
+}
+
+type DomainSnapshot struct {
+	Domain              string             `json:"domain"`
+	TopologyClass       string             `json:"topology_class"`
+	PhaseRecommendation string             `json:"phase_recommendation"`
+	FrictionLevel       int                `json:"friction_level"`
+	Confidence          float64            `json:"confidence"`
+	SignalDensity       float64            `json:"signal_density"`
+	ObservationCount    int                `json:"observation_count"`
+	PatternCount        int                `json:"pattern_count"`
+	RobotsDecisionRoot  RobotsPathDecision `json:"robots_decision_root"`
+	SeedPaths           []string           `json:"seed_paths"`
+	Warnings            []string           `json:"warnings"`
+}
+
+type SeedProposal struct {
+	URL               string  `json:"url"`
+	Path              string  `json:"path"`
+	TopologyClass     string  `json:"topology_class"`
+	Priority          float64 `json:"priority"`
+	Reason            string  `json:"reason"`
+	RequiresClearance bool    `json:"requires_clearance"`
 }
 
 type MemoryCursorStore struct {
@@ -248,22 +309,22 @@ type CrawlManifest struct {
 }
 
 type DomainMap struct {
-	Domain                      string            `json:"domain"`
-	DisallowedTopologyClasses   map[string]string `json:"disallowed_topology_classes"`
-	AllowedSignalPaths          []PathPattern     `json:"allowed_signal_paths"`
-	CrawlDelaySeconds           float64           `json:"crawl_delay_seconds"`
-	SitemapURLs                 []string          `json:"sitemap_urls"`
-	PathTopologyMap             map[string]string `json:"path_topology_map"`
-	FrictionZones               []PathPattern     `json:"friction_zones"`
-	SignalZones                 []PathPattern     `json:"signal_zones"`
-	BotMitigation               string            `json:"bot_mitigation"`
-	RenderRequirements          map[string]string `json:"render_requirements"`
-	RateLimitProfile            RateLimitProfile  `json:"rate_limit_profile"`
-	CrawlManifest               CrawlManifest     `json:"crawl_manifest"`
-	ObservedPathCount           int               `json:"observed_path_count"`
-	TopologyEntropyMilli        int               `json:"topology_entropy_milli"`
-	FingerprintSHA256           string            `json:"fingerprint_sha256"`
-	AnalyzedAtUnix              int64             `json:"analyzed_at_unix"`
+	Domain                    string            `json:"domain"`
+	DisallowedTopologyClasses map[string]string `json:"disallowed_topology_classes"`
+	AllowedSignalPaths        []PathPattern     `json:"allowed_signal_paths"`
+	CrawlDelaySeconds         float64           `json:"crawl_delay_seconds"`
+	SitemapURLs               []string          `json:"sitemap_urls"`
+	PathTopologyMap           map[string]string `json:"path_topology_map"`
+	FrictionZones             []PathPattern     `json:"friction_zones"`
+	SignalZones               []PathPattern     `json:"signal_zones"`
+	BotMitigation             string            `json:"bot_mitigation"`
+	RenderRequirements        map[string]string `json:"render_requirements"`
+	RateLimitProfile          RateLimitProfile  `json:"rate_limit_profile"`
+	CrawlManifest             CrawlManifest     `json:"crawl_manifest"`
+	ObservedPathCount         int               `json:"observed_path_count"`
+	TopologyEntropyMilli      int               `json:"topology_entropy_milli"`
+	FingerprintSHA256         string            `json:"fingerprint_sha256"`
+	AnalyzedAtUnix            int64             `json:"analyzed_at_unix"`
 }
 
 type DomainTopologyEvent struct {
@@ -278,7 +339,7 @@ type BridgeRequest struct {
 }
 
 type DomainAnalyzer struct {
-	mu          sync.RWMutex
+	mu           sync.RWMutex
 	fingerprints map[string][FingerprintSlotBytes]byte
 }
 
@@ -422,28 +483,28 @@ func (a *DomainAnalyzer) AnalyzeFetchRecords(domain string, history []FetchRecor
 		contentLanguage = "unknown"
 	}
 	fingerprint := &DomainFingerprint{
-		Domain:               domain,
-		TopologyClass:        dominantTopology,
-		TopologyDistribution: distribution,
-		URLPatterns:          patterns,
-		RobotsSignals:        robotsAnalysis,
-		ContentLanguage:      contentLanguage,
-		AvgResponseSize:      int64(math.Round(sizeStats.Mean)),
-		AvgLatencyMS:         latencyStats.Mean,
-		SizeStats:            sizeStats,
-		LatencyStats:         latencyStats,
-		Health:               health.Finalize(),
-		PhaseRecommendation:  phase,
-		FrictionLevel:        robotsAnalysis.FrictionLevel,
-		Confidence:           confidence,
-		ObservationCount:     len(normalizedHistory),
-		ObservedPathCount:    len(paths),
-		SignalDensity:        signalDensityFromPatterns(patterns, len(paths)),
+		Domain:                domain,
+		TopologyClass:         dominantTopology,
+		TopologyDistribution:  distribution,
+		URLPatterns:           patterns,
+		RobotsSignals:         robotsAnalysis,
+		ContentLanguage:       contentLanguage,
+		AvgResponseSize:       int64(math.Round(sizeStats.Mean)),
+		AvgLatencyMS:          latencyStats.Mean,
+		SizeStats:             sizeStats,
+		LatencyStats:          latencyStats,
+		Health:                health.Finalize(),
+		PhaseRecommendation:   phase,
+		FrictionLevel:         robotsAnalysis.FrictionLevel,
+		Confidence:            confidence,
+		ObservationCount:      len(normalizedHistory),
+		ObservedPathCount:     len(paths),
+		SignalDensity:         signalDensityFromPatterns(patterns, len(paths)),
 		FreshnessHalfLifeDays: estimateFreshnessHalfLife(latestFetch, time.Now().Unix()),
-		FingerprintSHA256:    fpHash,
-		FingerprintSlot:      slot[:],
-		AnalyzedAtUnix:       time.Now().Unix(),
-		RunID:                runID,
+		FingerprintSHA256:     fpHash,
+		FingerprintSlot:       slot[:],
+		AnalyzedAtUnix:        time.Now().Unix(),
+		RunID:                 runID,
 	}
 	a.mu.Lock()
 	a.fingerprints[domain] = slot
@@ -752,6 +813,268 @@ func FingerprintSummaryLine(fp *DomainFingerprint) string {
 	return strings.Join(parts, " ")
 }
 
+func EvaluateRobotsPath(robots RobotsAnalysis, rawPath string) RobotsPathDecision {
+	path := normalizePath(rawPath)
+	if path == "" {
+		path = "/"
+	}
+	decision := RobotsPathDecision{
+		Path:          path,
+		Allowed:       true,
+		FrictionLevel: robots.FrictionLevel,
+		Reason:        "no_matching_rule",
+	}
+	bestDirective := ""
+	bestPath := ""
+	bestLine := 0
+	bestLen := -1
+	for _, rule := range robots.AllowRules {
+		prefix := strings.TrimSuffix(rule.Path, "*")
+		if strings.HasPrefix(path, prefix) && len(prefix) > bestLen {
+			bestDirective = "allow"
+			bestPath = rule.Path
+			bestLine = rule.Line
+			bestLen = len(prefix)
+		}
+	}
+	for _, rule := range robots.DisallowRules {
+		prefix := strings.TrimSuffix(rule.Path, "*")
+		if strings.HasPrefix(path, prefix) && len(prefix) > bestLen {
+			bestDirective = "disallow"
+			bestPath = rule.Path
+			bestLine = rule.Line
+			bestLen = len(prefix)
+		}
+	}
+	if bestDirective == "" {
+		return decision
+	}
+	decision.MatchedRule = bestPath
+	decision.MatchedLine = bestLine
+	decision.Directive = bestDirective
+	if bestDirective == "disallow" {
+		decision.Allowed = false
+		decision.Reason = "blocked_by_robots"
+		if decision.FrictionLevel < FrictionLevelCL3 {
+			decision.FrictionLevel = FrictionLevelCL3
+		}
+		return decision
+	}
+	decision.Allowed = true
+	decision.Reason = "allowed_by_specific_rule"
+	return decision
+}
+
+func ExtractHeaderSignals(record FetchRecord) HeaderSignals {
+	headers := normalizeHeaders(record.Headers)
+	contentType := firstNonEmptyString(record.ContentType, headers["content-type"])
+	contentLanguage := normalizeLanguage(record.ContentLanguage, headers)
+	compression := firstNonEmptyString(headers["content-encoding"], headers["x-encoded-content-encoding"])
+	server := strings.ToLower(firstNonEmptyString(headers["server"], headers["x-powered-by"], headers["via"]))
+	cache := classifyCachePolicy(headers)
+	framework := detectFrameworkHint(headers)
+	score := securityHeaderScore(headers)
+	return HeaderSignals{
+		ContentType:         contentType,
+		ContentFamily:       contentTypeFamily(contentType),
+		ContentLanguage:     contentLanguage,
+		CachePolicy:         cache,
+		ServerFamily:        classifyServerFamily(server),
+		HasSecurityHeaders:  score > 0,
+		SecurityHeaderScore: score,
+		Compression:         compression,
+		FrameworkHint:       framework,
+		HeaderCount:         len(headers),
+		NormalizedHeaders:   headers,
+	}
+}
+
+func DeduplicateFetchRecords(records []FetchRecord) []FetchRecord {
+	if len(records) <= 1 {
+		return append([]FetchRecord(nil), records...)
+	}
+	byURL := make(map[string]FetchRecord, len(records))
+	for _, record := range records {
+		if record.URL == "" {
+			continue
+		}
+		key := canonicalRecordURL(record.URL)
+		existing, ok := byURL[key]
+		if !ok || record.FetchedAtUnix > existing.FetchedAtUnix || (record.FetchedAtUnix == existing.FetchedAtUnix && record.StatusCode < existing.StatusCode) {
+			byURL[key] = record
+		}
+	}
+	keys := make([]string, 0, len(byURL))
+	for key := range byURL {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]FetchRecord, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, byURL[key])
+	}
+	return out
+}
+
+func SummarizeDomainCohort(fingerprints []*DomainFingerprint) DomainCohortSummary {
+	summary := DomainCohortSummary{
+		ByTopology:            make(map[string]int),
+		ByPhase:               make(map[string]int),
+		ByFriction:            make(map[int]int),
+		RepresentativeByClass: make(map[string]string),
+		FingerprintHashes:     make(map[string]string),
+	}
+	var confidenceSum float64
+	var densitySum float64
+	type rankedDomain struct {
+		domain     string
+		confidence float64
+	}
+	var ranked []rankedDomain
+	for _, fp := range fingerprints {
+		if fp == nil {
+			continue
+		}
+		summary.TotalDomains++
+		summary.ByTopology[fp.TopologyClass]++
+		summary.ByPhase[fp.PhaseRecommendation]++
+		summary.ByFriction[fp.FrictionLevel]++
+		confidenceSum += fp.Confidence
+		densitySum += fp.SignalDensity
+		ranked = append(ranked, rankedDomain{domain: fp.Domain, confidence: fp.Confidence})
+		if _, ok := summary.RepresentativeByClass[fp.TopologyClass]; !ok {
+			summary.RepresentativeByClass[fp.TopologyClass] = fp.Domain
+		}
+		summary.FingerprintHashes[fp.Domain] = fp.FingerprintSHA256
+		if fp.FreshnessHalfLifeDays <= 7 || fp.Confidence < 0.40 || fp.RobotsSignals.RequiresClearance {
+			summary.RefreshRecommended = append(summary.RefreshRecommended, fp.Domain)
+		}
+		report := ValidateDomainFingerprint(fp)
+		for _, warning := range report.Warnings {
+			summary.Warnings = append(summary.Warnings, fp.Domain+": "+warning)
+		}
+	}
+	if summary.TotalDomains > 0 {
+		summary.MeanConfidence = confidenceSum / float64(summary.TotalDomains)
+		summary.MeanSignalDensity = densitySum / float64(summary.TotalDomains)
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].confidence != ranked[j].confidence {
+			return ranked[i].confidence > ranked[j].confidence
+		}
+		return ranked[i].domain < ranked[j].domain
+	})
+	for i := 0; i < len(ranked) && i < 10; i++ {
+		summary.HighestConfidence = append(summary.HighestConfidence, ranked[i].domain)
+	}
+	sort.Strings(summary.RefreshRecommended)
+	sort.Strings(summary.Warnings)
+	return summary
+}
+
+func BuildDomainSnapshot(fp *DomainFingerprint) DomainSnapshot {
+	if fp == nil {
+		return DomainSnapshot{Warnings: []string{"fingerprint is nil"}}
+	}
+	report := ValidateDomainFingerprint(fp)
+	seeds := ProposeSeedPaths(fp, 8)
+	paths := make([]string, 0, len(seeds))
+	for _, seed := range seeds {
+		paths = append(paths, seed.Path)
+	}
+	return DomainSnapshot{
+		Domain:              fp.Domain,
+		TopologyClass:       fp.TopologyClass,
+		PhaseRecommendation: fp.PhaseRecommendation,
+		FrictionLevel:       fp.FrictionLevel,
+		Confidence:          fp.Confidence,
+		SignalDensity:       fp.SignalDensity,
+		ObservationCount:    fp.ObservationCount,
+		PatternCount:        len(fp.URLPatterns),
+		RobotsDecisionRoot:  EvaluateRobotsPath(fp.RobotsSignals, "/"),
+		SeedPaths:           paths,
+		Warnings:            append(append([]string(nil), report.Errors...), report.Warnings...),
+	}
+}
+
+func ProposeSeedPaths(fp *DomainFingerprint, limit int) []SeedProposal {
+	if fp == nil || fp.Domain == "" {
+		return nil
+	}
+	if limit <= 0 {
+		limit = 16
+	}
+	proposals := make([]SeedProposal, 0, limit)
+	add := func(path string, topology string, priority float64, reason string) {
+		if len(proposals) >= limit {
+			return
+		}
+		path = normalizePath(path)
+		decision := EvaluateRobotsPath(fp.RobotsSignals, path)
+		if !decision.Allowed {
+			priority *= 0.25
+		}
+		proposals = append(proposals, SeedProposal{
+			URL:               "https://" + fp.Domain + path,
+			Path:              path,
+			TopologyClass:     topology,
+			Priority:          clampFloat(priority, 0, 1),
+			Reason:            reason,
+			RequiresClearance: decision.FrictionLevel >= FrictionLevelCL3,
+		})
+	}
+	add("/", fp.TopologyClass, 0.40, "domain_root")
+	for _, sm := range fp.RobotsSignals.SitemapURLs {
+		if len(proposals) >= limit {
+			break
+		}
+		add(pathOf(sm), TopologyGenericHTML, 0.55, "sitemap")
+	}
+	patterns := append([]URLPattern(nil), fp.URLPatterns...)
+	sort.Slice(patterns, func(i, j int) bool {
+		left := patterns[i].Confidence * float64(patterns[i].Count+1)
+		right := patterns[j].Confidence * float64(patterns[j].Count+1)
+		if left != right {
+			return left > right
+		}
+		return patterns[i].Pattern < patterns[j].Pattern
+	})
+	for _, pattern := range patterns {
+		if len(proposals) >= limit {
+			break
+		}
+		path := strings.TrimSuffix(pattern.Pattern, "/*")
+		path = strings.ReplaceAll(path, "*", "index")
+		add(path, pattern.TopologyClass, pattern.Confidence, "url_pattern")
+	}
+	return dedupeSeedProposals(proposals, limit)
+}
+
+func MergeRobotsAnalysis(primary RobotsAnalysis, secondary RobotsAnalysis) RobotsAnalysis {
+	out := primary
+	out.DisallowRules = mergeRobotsRules(primary.DisallowRules, secondary.DisallowRules)
+	out.AllowRules = mergeRobotsRules(primary.AllowRules, secondary.AllowRules)
+	out.SitemapURLs = canonicalSitemaps(append(append([]string(nil), primary.SitemapURLs...), secondary.SitemapURLs...))
+	if out.CrawlDelaySeconds <= 0 || (secondary.CrawlDelaySeconds > 0 && secondary.CrawlDelaySeconds > out.CrawlDelaySeconds) {
+		out.CrawlDelaySeconds = secondary.CrawlDelaySeconds
+	}
+	if secondary.FrictionLevel > out.FrictionLevel {
+		out.FrictionLevel = secondary.FrictionLevel
+	}
+	if out.BotMitigation == "" || out.BotMitigation == "none" {
+		out.BotMitigation = secondary.BotMitigation
+	}
+	out.RequiresClearance = out.RequiresClearance || secondary.RequiresClearance || out.FrictionLevel >= FrictionLevelCL3
+	out.RobotsFingerprintHash = hashString(strings.Join(robotsRulesToStrings(out.DisallowRules), "\x00") + strings.Join(robotsRulesToStrings(out.AllowRules), "\x00") + strings.Join(out.SitemapURLs, "\x00"))
+	if out.PreferredFetchStrategy == "" || out.PreferredFetchStrategy == "static" {
+		out.PreferredFetchStrategy = secondary.PreferredFetchStrategy
+	}
+	if out.PreferredFetchStrategy == "" {
+		out.PreferredFetchStrategy = "static"
+	}
+	return out
+}
+
 func NewMemoryCursorStore() *MemoryCursorStore {
 	return &MemoryCursorStore{
 		history:  make(map[string][]FetchRecord),
@@ -855,10 +1178,10 @@ func (fp DomainFingerprint) ToDomainMap() DomainMap {
 			CrawlDelaySeconds: fp.RobotsSignals.CrawlDelaySeconds,
 			BurstCapacity:     burstForDelay(fp.RobotsSignals.CrawlDelaySeconds),
 		},
-		ObservedPathCount:      fp.ObservedPathCount,
-		TopologyEntropyMilli:   distributionEntropyMilli(fp.TopologyDistribution),
-		FingerprintSHA256:      fp.FingerprintSHA256,
-		AnalyzedAtUnix:         fp.AnalyzedAtUnix,
+		ObservedPathCount:    fp.ObservedPathCount,
+		TopologyEntropyMilli: distributionEntropyMilli(fp.TopologyDistribution),
+		FingerprintSHA256:    fp.FingerprintSHA256,
+		AnalyzedAtUnix:       fp.AnalyzedAtUnix,
 	}
 }
 
@@ -1959,6 +2282,187 @@ func driftLevel(score float64) string {
 	default:
 		return "none"
 	}
+}
+
+func normalizeHeaders(headers map[string]string) map[string]string {
+	out := make(map[string]string, len(headers))
+	for key, value := range headers {
+		key = strings.TrimSpace(strings.ToLower(key))
+		value = strings.TrimSpace(value)
+		if key == "" {
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
+func classifyCachePolicy(headers map[string]string) string {
+	cc := strings.ToLower(headers["cache-control"])
+	switch {
+	case strings.Contains(cc, "no-store"):
+		return "no_store"
+	case strings.Contains(cc, "no-cache"):
+		return "revalidate"
+	case strings.Contains(cc, "max-age"):
+		return "cacheable"
+	case headers["etag"] != "" || headers["last-modified"] != "":
+		return "validator"
+	default:
+		return "unknown"
+	}
+}
+
+func classifyServerFamily(server string) string {
+	server = strings.ToLower(server)
+	switch {
+	case strings.Contains(server, "nginx"):
+		return "nginx"
+	case strings.Contains(server, "apache"):
+		return "apache"
+	case strings.Contains(server, "cloudflare"):
+		return "cloudflare"
+	case strings.Contains(server, "akamai"):
+		return "akamai"
+	case strings.Contains(server, "fastly"):
+		return "fastly"
+	case strings.Contains(server, "vercel"):
+		return "vercel"
+	case strings.Contains(server, "netlify"):
+		return "netlify"
+	case strings.Contains(server, "gunicorn") || strings.Contains(server, "uvicorn"):
+		return "python_app"
+	case strings.Contains(server, "node") || strings.Contains(server, "express"):
+		return "node_app"
+	default:
+		return "unknown"
+	}
+}
+
+func detectFrameworkHint(headers map[string]string) string {
+	keys := []string{"x-powered-by", "x-framework", "x-nextjs-cache", "x-drupal-cache", "x-generator", "server-timing"}
+	for _, key := range keys {
+		value := strings.ToLower(headers[key])
+		switch {
+		case strings.Contains(value, "next"):
+			return "nextjs"
+		case strings.Contains(value, "react"):
+			return "react"
+		case strings.Contains(value, "wordpress"):
+			return "wordpress"
+		case strings.Contains(value, "drupal"):
+			return "drupal"
+		case strings.Contains(value, "shopify"):
+			return "shopify"
+		case strings.Contains(value, "django"):
+			return "django"
+		case strings.Contains(value, "rails"):
+			return "rails"
+		}
+	}
+	if headers["x-nextjs-cache"] != "" {
+		return "nextjs"
+	}
+	return "unknown"
+}
+
+func securityHeaderScore(headers map[string]string) float64 {
+	if len(headers) == 0 {
+		return 0
+	}
+	score := 0.0
+	weights := map[string]float64{
+		"strict-transport-security": 0.25,
+		"content-security-policy":   0.25,
+		"x-content-type-options":    0.15,
+		"x-frame-options":           0.15,
+		"referrer-policy":           0.10,
+		"permissions-policy":        0.10,
+	}
+	for key, weight := range weights {
+		if headers[key] != "" {
+			score += weight
+		}
+	}
+	return clampFloat(score, 0, 1)
+}
+
+func canonicalRecordURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return strings.TrimSpace(strings.ToLower(raw))
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	parsed.Host = normalizeDomain(parsed.Host)
+	parsed.Fragment = ""
+	q := parsed.Query()
+	for _, noisy := range []string{"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid"} {
+		q.Del(noisy)
+	}
+	parsed.RawQuery = q.Encode()
+	return parsed.String()
+}
+
+func dedupeSeedProposals(in []SeedProposal, limit int) []SeedProposal {
+	seen := make(map[string]SeedProposal, len(in))
+	for _, seed := range in {
+		if seed.Path == "" {
+			continue
+		}
+		existing, ok := seen[seed.Path]
+		if !ok || seed.Priority > existing.Priority {
+			seen[seed.Path] = seed
+		}
+	}
+	out := make([]SeedProposal, 0, len(seen))
+	for _, seed := range seen {
+		out = append(out, seed)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Priority != out[j].Priority {
+			return out[i].Priority > out[j].Priority
+		}
+		return out[i].Path < out[j].Path
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+func mergeRobotsRules(a []RobotsRule, b []RobotsRule) []RobotsRule {
+	seen := make(map[string]RobotsRule, len(a)+len(b))
+	for _, rule := range append(append([]RobotsRule(nil), a...), b...) {
+		key := rule.Directive + "\x00" + rule.Path
+		existing, ok := seen[key]
+		if !ok || (rule.Line > 0 && (existing.Line == 0 || rule.Line < existing.Line)) {
+			seen[key] = rule
+		}
+	}
+	out := make([]RobotsRule, 0, len(seen))
+	for _, rule := range seen {
+		out = append(out, rule)
+	}
+	sortRobotsRules(out)
+	return out
+}
+
+func robotsRulesToStrings(rules []RobotsRule) []string {
+	out := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		out = append(out, rule.Directive+":"+rule.Path+":"+strconv.Itoa(rule.Line))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 type pathStats struct {

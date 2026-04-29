@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "../tools/dist/swarm-axiom",
+    "rootDir": ".",
+    "types": ["node"],
+    "typeRoots": ["../tools/node_modules/@types"]
+  },
+  "include": ["axiom/**/*.ts"]
+}

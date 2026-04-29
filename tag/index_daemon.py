@@ -36,7 +36,10 @@ from signal_kernel.contracts import (
 )
 
 
-PHASE_SLOT = struct.Struct("<I I f I I Q I")
+# Shared with daemons/daemon_common.h:
+# <BBHfIfQff> = phase, flags, generation, confidence, observation_count,
+# surprise_rate, last_updated_unix, npi, recipe_yield.
+PHASE_SLOT = struct.Struct("<BBHfIfQff")
 PHASE_SLOT_BYTES = 32
 PHASE_COLD = 1
 PHASE_LEARNING = 2
@@ -49,39 +52,28 @@ RECIPE_DRAFT_CONFIDENCE_MIN = 0.60
 
 @dataclass
 class PhaseState:
-    topology_hash: int
     phase: int = PHASE_COLD
+    flags: int = 0
+    generation: int = 1
     confidence: float = 0.0
-    observations: int = 0
-    surprises: int = 0
+    observation_count: int = 0
+    surprise_rate: float = 0.0
     updated_unix: int = field(default_factory=lambda: int(time.time()))
-    crc32: int = 0
+    npi: float = 0.0
+    recipe_yield: float = 0.0
 
     def pack(self) -> bytes:
-        self.crc32 = self.compute_crc()
         return PHASE_SLOT.pack(
-            self.topology_hash,
             self.phase,
+            self.flags,
+            self.generation,
             self.confidence,
-            self.observations,
-            self.surprises,
+            self.observation_count,
+            self.surprise_rate,
             self.updated_unix,
-            self.crc32,
-        ) + b"\x00" * (PHASE_SLOT_BYTES - PHASE_SLOT.size)
-
-    def compute_crc(self) -> int:
-        import zlib
-
-        raw = PHASE_SLOT.pack(
-            self.topology_hash,
-            self.phase,
-            self.confidence,
-            self.observations,
-            self.surprises,
-            self.updated_unix,
-            0,
+            self.npi,
+            self.recipe_yield,
         )
-        return zlib.crc32(raw) & 0xFFFFFFFF
 
 
 class PhaseStore:
@@ -108,15 +100,28 @@ class PhaseStore:
         offset = slot * PHASE_SLOT_BYTES
         raw = self._mmap[offset : offset + PHASE_SLOT.size]
         vals = PHASE_SLOT.unpack(raw)
-        if vals[0] == 0:
-            return PhaseState(topology_hash=self._hash(topology_class))
-        return PhaseState(*vals)
+        phase = vals[0]
+        if phase == 0:
+            return PhaseState()
+        return PhaseState(
+            phase=phase,
+            flags=vals[1],
+            generation=vals[2],
+            confidence=vals[3],
+            observation_count=vals[4],
+            surprise_rate=vals[5],
+            updated_unix=vals[6],
+            npi=vals[7],
+            recipe_yield=vals[8],
+        )
 
     def write(self, topology_class: str, state: PhaseState) -> None:
         slot = self._slot(topology_class)
         offset = slot * PHASE_SLOT_BYTES
+        state.generation = (state.generation + 1) & 0xFFFF
+        state.updated_unix = int(time.time())
         self._mmap[offset : offset + PHASE_SLOT_BYTES] = state.pack()
-        self._mmap.flush(offset, PHASE_SLOT_BYTES)
+        self._mmap.flush()
 
     def _slot(self, topology_class: str) -> int:
         return self._hash(topology_class) % self.slots
@@ -137,6 +142,7 @@ class DaemonStats:
     recipe_health: int = 0
     store_health: int = 0
     weights_updated: int = 0
+    phase_transitions: int = 0
     queued_gradients: int = 0
     dropped_gradients: int = 0
     drafted_recipes: int = 0
@@ -271,6 +277,8 @@ class IndexDaemon:
                 await self.handle_store_health(event)
             elif isinstance(event, WeightsUpdatedEvent):
                 await self.handle_weights_updated(event)
+            elif isinstance(event, PhaseTransitionEvent):
+                await self.handle_phase_transition(event)
             else:
                 raise TypeError(f"unsupported event type: {type(event).__name__}")
         except Exception:
@@ -280,8 +288,11 @@ class IndexDaemon:
     async def handle_signal_extracted(self, event: SignalExtractedEvent) -> None:
         self.stats.signal_events += 1
         state = self.phase_store.read(event.topology_class)
-        state.observations += 1
+        state.observation_count += 1
         state.confidence = min(1.0, max(state.confidence, event.signal_density))
+        state.npi = min(1.0, max(state.npi, event.signal_density))
+        if event.byte_count > 0:
+            state.recipe_yield = min(1.0, max(state.recipe_yield, event.byte_count / max(event.byte_count * 4, 1)))
         state.updated_unix = int(time.time())
         drafts = self.discover_signal_zones(event)
         if drafts:
@@ -290,16 +301,25 @@ class IndexDaemon:
             if added:
                 self.stats.drafted_recipes += added
                 self.recipe_registry.atomic_save()
-        if state.phase == PHASE_COLD and state.observations >= 10 and state.confidence >= 0.70:
+        if state.phase == PHASE_COLD and state.observation_count >= 50 and state.confidence >= 0.70 and state.surprise_rate < 0.20:
             state.phase = PHASE_LEARNING
-        if state.phase == PHASE_LEARNING and state.observations >= 50 and state.confidence >= 0.90 and state.surprises == 0:
+        if (
+            state.phase == PHASE_LEARNING
+            and state.observation_count >= 200
+            and state.confidence >= 0.85
+            and state.surprise_rate < 0.05
+            and state.npi >= 0.70
+            and state.recipe_yield >= 0.005
+        ):
             state.phase = PHASE_KNOWN
         self.phase_store.write(event.topology_class, state)
 
     async def handle_surprise(self, event: SurpriseEvent) -> None:
         self.stats.surprise_events += 1
         state = self.phase_store.read(event.topology_class)
-        state.surprises += 1
+        state.observation_count += 1
+        surprise_events = round(state.surprise_rate * max(state.observation_count - 1, 0)) + 1
+        state.surprise_rate = min(1.0, surprise_events / max(state.observation_count, 1))
         state.confidence = max(0.0, state.confidence - event.surprise_score)
         if state.phase == PHASE_KNOWN and event.dissolve_triggered:
             state.phase = PHASE_LEARNING
@@ -327,6 +347,14 @@ class IndexDaemon:
 
     async def handle_weights_updated(self, event: WeightsUpdatedEvent) -> None:
         self.stats.weights_updated += 1
+
+    async def handle_phase_transition(self, event: PhaseTransitionEvent) -> None:
+        self.stats.phase_transitions += 1
+        state = self.phase_store.read(event.topology_class)
+        state.phase = event.to_phase
+        state.confidence = event.confidence
+        state.updated_unix = int(time.time())
+        self.phase_store.write(event.topology_class, state)
 
     async def _queue_gradient(self, item: Dict[str, Any], *, priority: int = GRADIENT_PRIORITY_LOW) -> None:
         self._gradient_sequence += 1

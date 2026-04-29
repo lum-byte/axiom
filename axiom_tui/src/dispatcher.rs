@@ -3,11 +3,13 @@ use std::net::TcpStream;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct InterfaceResult {
     pub ok: bool,
     pub raw: String,
 }
 
+#[allow(dead_code)]
 impl InterfaceResult {
     pub fn status(&self) -> Option<String> {
         extract_json_string(&self.raw, "status")
@@ -35,9 +37,16 @@ pub struct QueryRequest {
 
 impl QueryRequest {
     pub fn from_command_line(command: &str) -> Result<Self, String> {
-        let (head, tail) = command
-            .split_once('|')
-            .ok_or_else(|| "command must contain '|'".to_string())?;
+        let stripped = command.trim();
+        if stripped.eq_ignore_ascii_case("axiom") {
+            return Ok(Self { run_id: None, command: "status".to_string(), payload: String::new() });
+        }
+        let Some((head, tail)) = stripped.split_once('|') else {
+            if stripped.is_empty() {
+                return Err("command must contain text".to_string());
+            }
+            return Ok(Self { run_id: None, command: "search".to_string(), payload: stripped.to_string() });
+        };
         let cmd = head.trim().to_ascii_lowercase();
         let payload = tail.trim().to_string();
         match cmd.as_str() {
@@ -86,6 +95,7 @@ pub struct TcpDispatcher {
     timeout: Duration,
 }
 
+#[allow(dead_code)]
 impl TcpDispatcher {
     pub fn new(addr: impl Into<String>) -> Self {
         Self { addr: addr.into(), timeout: Duration::from_secs(5) }
@@ -124,6 +134,8 @@ impl InterfaceDispatcher {
 impl Dispatcher for InterfaceDispatcher {
     fn dispatch(&self, command: &str) -> Result<InterfaceResult, String> {
         let req = QueryRequest::from_command_line(command)?;
+        #[cfg(not(unix))]
+        let _ = &req;
         match &self.transport {
             Transport::Tcp { addr } => {
                 let tcp = TcpDispatcher { addr: addr.clone(), timeout: self.timeout };
@@ -237,10 +249,25 @@ mod tests {
     }
 
     #[test]
+    fn query_request_defaults_bare_text_to_search() {
+        let req = QueryRequest::from_command_line("latest AI news").unwrap();
+        assert_eq!(req.command, "search");
+        assert_eq!(req.payload, "latest AI news");
+        let prompt = QueryRequest::from_command_line("axiom").unwrap();
+        assert_eq!(prompt.command, "status");
+    }
+
+    #[test]
     fn parses_interface_result_status() {
         let result = result_from_raw("{\"run_id\":\"1\",\"status\":\"accepted\",\"message\":\"queued\"}\n".to_string());
         assert!(result.ok);
         assert_eq!(result.status().as_deref(), Some("accepted"));
         assert_eq!(result.message().as_deref(), Some("queued"));
+        assert_eq!(result.run_id().as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn constructs_tcp_dispatcher() {
+        let _dispatcher = TcpDispatcher::new("127.0.0.1:8766");
     }
 }

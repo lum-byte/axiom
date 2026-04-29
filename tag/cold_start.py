@@ -33,7 +33,7 @@ STORE_FILES = {
 }
 
 REQUIRED_TOOLS = ("gcc",)
-OPTIONAL_TOOLS = ("nvcc", "go", "cargo", "tor", "chromium", "chrome")
+OPTIONAL_TOOLS = ("nvcc", "go", "cargo", "tor", "chromium", "chrome", "node", "npm", "bun")
 
 
 @dataclass(frozen=True)

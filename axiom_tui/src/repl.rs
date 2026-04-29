@@ -1,5 +1,6 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
+    AxiomPrompt,
     Search(String),
     Fetch(String),
     Learn(String),
@@ -10,6 +11,7 @@ pub enum Command {
 impl Command {
     pub fn name(&self) -> &'static str {
         match self {
+            Command::AxiomPrompt => "axiom",
             Command::Search(_) => "search",
             Command::Fetch(_) => "fetch",
             Command::Learn(_) => "learn",
@@ -21,19 +23,29 @@ impl Command {
     pub fn payload(&self) -> &str {
         match self {
             Command::Search(v) | Command::Fetch(v) | Command::Learn(v) => v,
-            Command::Status | Command::Quit => "",
+            Command::AxiomPrompt | Command::Status | Command::Quit => "",
         }
     }
 
     pub fn to_line(&self) -> String {
+        if matches!(self, Command::AxiomPrompt) {
+            return "status |".to_string();
+        }
         format!("{} | {}", self.name(), self.payload())
     }
 }
 
 pub fn parse_line(line: &str) -> Result<Command, String> {
-    let (head, tail) = line
-        .split_once('|')
-        .ok_or_else(|| "command must contain '|'".to_string())?;
+    let stripped = line.trim();
+    if stripped.eq_ignore_ascii_case("axiom") {
+        return Ok(Command::AxiomPrompt);
+    }
+    let Some((head, tail)) = stripped.split_once('|') else {
+        if stripped.is_empty() {
+            return Err("command must contain text".to_string());
+        }
+        return Ok(Command::Search(stripped.to_string()));
+    };
     let cmd = head.trim().to_ascii_lowercase();
     let payload = tail.trim().to_string();
     match cmd.as_str() {
@@ -84,8 +96,9 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_pipe() {
-        assert!(parse_line("search rust").is_err());
+    fn defaults_missing_pipe_to_search() {
+        assert_eq!(parse_line("latest AI news").unwrap(), Command::Search("latest AI news".into()));
+        assert_eq!(parse_line("axiom").unwrap(), Command::AxiomPrompt);
     }
 
     #[test]

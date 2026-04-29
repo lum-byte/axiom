@@ -5,13 +5,15 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 os.environ.setdefault("AXIOM_BUS_HMAC_KEY", "1" * 64)
 
 from tag.cold_start import ColdStart
-from signal_kernel.contracts import FetchAnomalyEvent, FetchMode, SignalExtractedEvent, SurpriseEvent, new_run_id
+from signal_kernel.contracts import FetchAnomalyEvent, FetchMode, RawFetchEvent, SignalExtractedEvent, SurpriseEvent, new_run_id
 from tag.index_daemon import GRADIENT_PRIORITY_HIGH, IndexDaemon, run_once_for_test
-from tag.interface import AxiomInterface, InterfaceSocketServer, JsonLineCodec, parse_command
+from tag.interface import AxiomInterface, AxiomRuntimeContext, InterfaceSocketServer, JsonLineCodec, QueryOrchestrator, parse_command
 
 
 class RuntimeSurfaceTests(unittest.TestCase):
@@ -19,6 +21,11 @@ class RuntimeSurfaceTests(unittest.TestCase):
         parsed = parse_command("search | hello")
         self.assertEqual(parsed.command, "SEARCH")
         self.assertEqual(parsed.payload, "hello")
+        prompt = parse_command("axiom")
+        self.assertEqual(prompt.command, "STATUS")
+        natural = parse_command("latest AI news")
+        self.assertEqual(natural.command, "SEARCH")
+        self.assertEqual(natural.payload, "latest AI news")
 
     def test_cold_start_creates_store(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -98,14 +105,17 @@ class RuntimeSurfaceTests(unittest.TestCase):
         async def run() -> None:
             with tempfile.TemporaryDirectory() as td:
                 interface = AxiomInterface(store_dir=Path(td))
-                learn = await interface.handle_line("learn | example.com")
-                self.assertEqual(learn.status, "accepted")
-                search = await interface.handle_line("search | docs")
-                self.assertEqual(search.status, "ok")
-                status = await interface.handle_line("status |")
-                self.assertEqual(status.status, "ok")
-                self.assertGreaterEqual(status.data["metrics"]["handled"], 2)
-                self.assertTrue(status.data["recent"])
+                try:
+                    learn = await interface.handle_line("learn | example.com")
+                    self.assertEqual(learn.status, "accepted")
+                    search = await interface.handle_line("search | docs")
+                    self.assertEqual(search.status, "ok")
+                    status = await interface.handle_line("status |")
+                    self.assertEqual(status.status, "ok")
+                    self.assertGreaterEqual(status.data["metrics"]["handled"], 2)
+                    self.assertTrue(status.data["recent"])
+                finally:
+                    await interface.runtime.close()
 
         asyncio.run(run())
 
@@ -113,12 +123,181 @@ class RuntimeSurfaceTests(unittest.TestCase):
         async def run() -> None:
             with tempfile.TemporaryDirectory() as td:
                 interface = AxiomInterface(store_dir=Path(td))
-                bad = await interface.handle_line("fetch | ftp://example.com/file")
-                self.assertEqual(bad.status, "error")
-                learn = await interface.handle_json({"query_type": "LEARN", "payload": "https://docs.example.com/path"})
-                self.assertEqual(learn.status, "accepted")
-                search = await interface.handle_json({"command": "search", "payload": "docs"})
+                try:
+                    bad = await interface.handle_line("fetch | ftp://example.com/file")
+                    self.assertEqual(bad.status, "error")
+                    learn = await interface.handle_json({"query_type": "LEARN", "payload": "https://docs.example.com/path"})
+                    self.assertEqual(learn.status, "accepted")
+                    search = await interface.handle_json({"command": "search", "payload": "docs"})
+                    self.assertEqual(search.status, "ok")
+                finally:
+                    await interface.runtime.close()
+
+        asyncio.run(run())
+
+    def test_interface_search_returns_ranked_blocks(self) -> None:
+        async def run() -> None:
+            with tempfile.TemporaryDirectory() as td:
+                runtime = AxiomRuntimeContext(store_dir=Path(td))
+                runtime.learned_domains.add("wikipedia.org")
+
+                class FakeFetcher:
+                    async def fetch_single(self, url: str, cl_level: int = 1, topology_hint: str = "GENERIC_HTML") -> RawFetchEvent:
+                        self.last_url = url
+                        return RawFetchEvent(
+                            url=url,
+                            raw_bytes=(
+                                b"<html><head><title>Car - Wikipedia</title></head>"
+                                b"<body><p>A car is a wheeled motor vehicle used for transportation.</p>"
+                                b"<p>Cars usually have four wheels and primarily transport people.</p></body></html>"
+                            ),
+                            status_code=200,
+                            headers={"content-type": "text/html; charset=utf-8"},
+                            fetch_latency=0.05,
+                            fetch_mode=FetchMode.STATIC,
+                            is_robots_txt=False,
+                            is_sitemap=False,
+                            topology_hint=topology_hint,
+                            run_id=str(new_run_id()),
+                            manifest_id=str(new_run_id()),
+                            byte_count=196,
+                        )
+
+                    async def shutdown(self) -> None:
+                        return None
+
+                class FakeSanitizer:
+                    def process(self, raw: bytes) -> SimpleNamespace:
+                        return SimpleNamespace(
+                            ok=True,
+                            text=(
+                                "A car is a wheeled motor vehicle used for transportation.\n\n"
+                                "Cars usually have four wheels and primarily transport people."
+                            ),
+                            events=[],
+                            metrics=SimpleNamespace(),
+                        )
+
+                async def fake_ensure_crawl_stack() -> None:
+                    return None
+
+                runtime.fetcher = FakeFetcher()
+                runtime.sanitizer = FakeSanitizer()
+                runtime.classifier = False
+                runtime.ensure_crawl_stack = fake_ensure_crawl_stack  # type: ignore[assignment]
+
+                interface = AxiomInterface(store_dir=Path(td), runtime=runtime)
+                with mock.patch.object(
+                    QueryOrchestrator,
+                    "_run_kernel",
+                    new=mock.AsyncMock(
+                        return_value=(
+                            "A car is a wheeled motor vehicle used for transportation. "
+                            "Cars usually have four wheels and primarily transport people."
+                        )
+                    ),
+                ):
+                    search = await interface.handle_line("search | what is a car")
+
                 self.assertEqual(search.status, "ok")
+                self.assertFalse(search.data["search_engine"])
+                self.assertTrue(search.data["blocks"])
+                self.assertIn("wheeled motor vehicle", search.data["blocks"][0]["text"].lower())
+                self.assertTrue(any("/wiki/Car" in source["url"] for source in search.data["sources"]))
+                source_domains = {source["domain"] for source in search.data["sources"]}
+                self.assertIn("wikipedia.org", source_domains)
+                self.assertGreater(len(source_domains), 1)
+                self.assertTrue(any(source["seeded"] for source in search.data["sources"]))
+
+        asyncio.run(run())
+
+    def test_candidate_sources_are_open_web_not_wikipedia_limited(self) -> None:
+        runtime = AxiomRuntimeContext(store_dir=Path("/tmp/axiom-open-web-test"))
+        runtime.learned_domains.update({"docs.python.org", "example.com", "ietf.org"})
+        sources = QueryOrchestrator(runtime)._candidate_sources("async http standard")
+        domains = {source["domain"] for source in sources}
+        self.assertIn("docs.python.org", domains)
+        self.assertIn("example.com", domains)
+        self.assertIn("ietf.org", domains)
+        self.assertNotEqual(domains, {"wikipedia.org"})
+        self.assertGreater(len(domains), 8)
+        self.assertLess(
+            sum(1 for source in sources if source["domain"] == "wikipedia.org"),
+            len(sources),
+        )
+
+    def test_interface_dev_mode_clearance_escalation(self) -> None:
+        async def run() -> None:
+            with tempfile.TemporaryDirectory() as td:
+                runtime = AxiomRuntimeContext(store_dir=Path(td))
+                runtime.learned_domains.add("wikipedia.org")
+                attempted_levels: list[int] = []
+
+                class FakeFetcher:
+                    cl_state = SimpleNamespace(
+                        cl1_available=True,
+                        cl2_available=True,
+                        cl3_available=False,
+                        cl4_available=False,
+                    )
+
+                    async def fetch_single(self, url: str, cl_level: int = 1, topology_hint: str = "GENERIC_HTML") -> RawFetchEvent | None:
+                        attempted_levels.append(cl_level)
+                        if cl_level == 1:
+                            return None
+                        return RawFetchEvent(
+                            url=url,
+                            raw_bytes=(
+                                b"<html><head><title>Car - Wikipedia</title></head>"
+                                b"<body><p>A car is a wheeled motor vehicle used for transportation.</p></body></html>"
+                            ),
+                            status_code=200,
+                            headers={"content-type": "text/html; charset=utf-8"},
+                            fetch_latency=0.05,
+                            fetch_mode=FetchMode.HEADLESS,
+                            is_robots_txt=False,
+                            is_sitemap=False,
+                            topology_hint=topology_hint,
+                            run_id=str(new_run_id()),
+                            manifest_id=str(new_run_id()),
+                            byte_count=128,
+                        )
+
+                    async def shutdown(self) -> None:
+                        return None
+
+                class FakeSanitizer:
+                    def process(self, raw: bytes) -> SimpleNamespace:
+                        return SimpleNamespace(
+                            ok=True,
+                            text="A car is a wheeled motor vehicle used for transportation.",
+                            events=[],
+                            metrics=SimpleNamespace(),
+                        )
+
+                async def fake_ensure_crawl_stack() -> None:
+                    return None
+
+                runtime.fetcher = FakeFetcher()
+                runtime.sanitizer = FakeSanitizer()
+                runtime.classifier = False
+                runtime.ensure_crawl_stack = fake_ensure_crawl_stack  # type: ignore[assignment]
+
+                interface = AxiomInterface(store_dir=Path(td), runtime=runtime)
+                with (
+                    mock.patch.dict(os.environ, {"AXIOM_ENV": "dev"}, clear=False),
+                    mock.patch.object(
+                        QueryOrchestrator,
+                        "_run_kernel",
+                        new=mock.AsyncMock(return_value="A car is a wheeled motor vehicle used for transportation."),
+                    ),
+                ):
+                    search = await interface.handle_line("search | what is a car")
+
+                self.assertEqual(search.status, "ok")
+                self.assertEqual(attempted_levels[:2], [1, 2])
+                self.assertGreaterEqual(len(attempted_levels), 2)
+                self.assertEqual(search.data["blocks"][0]["fetch_mode"], "headless")
 
         asyncio.run(run())
 

@@ -1913,8 +1913,8 @@ class EncodingPhase:
             metrics.threats_detected += 1
             # Attempt to decode and re-encode to neutralize
             try:
-                raw = raw.decode("utf-7", errors="replace").encode("utf-8")
-            except (LookupError, UnicodeDecodeError):
+                raw = raw.decode("utf-7", errors="replace").encode("utf-8", errors="replace")
+            except (LookupError, UnicodeDecodeError, UnicodeEncodeError):
                 pass
 
         # Step 104 (ext): Overlong UTF-8 neutralization

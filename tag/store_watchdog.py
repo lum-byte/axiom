@@ -55,8 +55,61 @@ from typing import (
     Tuple,
 )
 import functools
-import inotify_simple
 import structlog
+
+try:
+    import inotify_simple
+    HAS_INOTIFY = True
+except Exception:
+    HAS_INOTIFY = False
+
+    @dataclass(frozen=True)
+    class _ShimEvent:
+        wd: int
+        mask: int = 0
+        cookie: int = 0
+        name: str = ""
+
+    class _ShimFlags:
+        CLOSE_WRITE = 0
+        MOVED_TO = 0
+
+    class _ShimINotify:
+        """
+        Windows/dev fallback for modules that import WATCHDOG but do not require
+        live Linux inotify behavior.
+
+        The shim keeps the public shape used by StoreWatchdog so imports and
+        registrations continue to work on Windows. read() yields no events,
+        which is acceptable for local development flows that do not depend on
+        hot-reload notifications.
+        """
+
+        def __init__(self) -> None:
+            self._watches: Dict[str, int] = {}
+            self._next_wd = 1
+
+        def add_watch(self, path: str, flags: int) -> int:
+            del flags
+            if path not in self._watches:
+                self._watches[path] = self._next_wd
+                self._next_wd += 1
+            return self._watches[path]
+
+        def read(self, timeout: int = 0) -> List[_ShimEvent]:
+            if timeout > 0:
+                time.sleep(timeout / 1000.0)
+            return []
+
+        def close(self) -> None:
+            self._watches.clear()
+
+    class _ShimINotifyModule:
+        INotify = _ShimINotify
+        Event = _ShimEvent
+        flags = _ShimFlags()
+
+    inotify_simple = _ShimINotifyModule()  # type: ignore[assignment]
 
 from signal_kernel.contracts import WatchdogHealth, WatchdogPathHealth, WatchdogHandlerHealth
 

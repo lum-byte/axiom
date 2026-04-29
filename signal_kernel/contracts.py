@@ -2343,6 +2343,155 @@ class StoreHealthEvent:
         _validate_run_id(self.run_id)
 
 
+@dataclass(frozen=True)
+class SnapshotCandidateEvent:
+    """
+    A URL selected by AXIOM routing as worth preserving as a temporary artifact.
+
+    This is not an external search result. It is a snapshot request for a URL
+    already surfaced by TAG routing, fetch/frontier traversal, or learned source
+    priority. The tools bridge decides whether capture is possible.
+    """
+    url:              str
+    reason:           str
+    relevance_score:  float
+    source_component: str
+    run_id:           str
+    query:            str = ""
+    topology_class:   str = FALLBACK_TOPOLOGY_CLASS
+    rank:             int = 0
+    ttl_seconds:      int = 3600
+    candidate_at:     str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def __post_init__(self) -> None:
+        _validate_http_url(self.url, "url")
+        if not self.reason:
+            raise ValueError("reason must be non-empty.")
+        _validate_fraction(self.relevance_score, "relevance_score")
+        if not self.source_component:
+            raise ValueError("source_component must be non-empty.")
+        _validate_topology_class(self.topology_class)
+        _validate_positive(self.rank, "rank")
+        _validate_positive(self.ttl_seconds, "ttl_seconds")
+        _validate_run_id(self.run_id)
+
+
+@dataclass(frozen=True)
+class SnapshotCapturedEvent:
+    """
+    Metadata for a temporary snapshot artifact produced by tools_bridge.py.
+
+    The artifact is intentionally outside the four durable store files. It may
+    contain raw HTML, rendered HTML, markdown, screenshots, or sidecar metadata.
+    The watermark applies to the artifact/provenance record only; clean signal
+    sent to the model remains unmodified.
+    """
+    url:              str
+    artifact_path:    str
+    artifact_kind:    str
+    sha256:           str
+    byte_count:       int
+    watermark:        str
+    source_tool:      str
+    run_id:           str
+    metadata:         Dict[str, Any] = field(default_factory=dict)
+    captured_at:      str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    expires_at:       str = ""
+
+    def __post_init__(self) -> None:
+        _validate_http_url(self.url, "url")
+        if not self.artifact_path:
+            raise ValueError("artifact_path must be non-empty.")
+        valid_kinds = {"raw_html", "rendered_html", "markdown", "screenshot", "metadata", "bundle"}
+        if self.artifact_kind not in valid_kinds:
+            raise ValueError(f"artifact_kind must be one of {sorted(valid_kinds)}, got {self.artifact_kind!r}.")
+        _validate_sha256(self.sha256, "sha256")
+        _validate_positive(self.byte_count, "byte_count")
+        if not self.watermark:
+            raise ValueError("watermark must be non-empty.")
+        if not self.source_tool:
+            raise ValueError("source_tool must be non-empty.")
+        _validate_run_id(self.run_id)
+
+
+@dataclass(frozen=True)
+class ToolInvocationEvent:
+    """Audit record for a tool call issued through the AXIOM tools bridge."""
+    tool_name:        str
+    invocation_id:    str
+    input_hash:       str
+    run_id:           str
+    source_component: str
+    mode:             str = "selective"
+    permission_class: str = "read_only"
+    started_at:       str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def __post_init__(self) -> None:
+        if not self.tool_name:
+            raise ValueError("tool_name must be non-empty.")
+        if not self.invocation_id:
+            raise ValueError("invocation_id must be non-empty.")
+        _validate_sha256(self.input_hash, "input_hash")
+        _validate_run_id(self.run_id)
+        if not self.source_component:
+            raise ValueError("source_component must be non-empty.")
+        if self.mode not in {"selective", "manual", "diagnostic", "snapshot"}:
+            raise ValueError("mode must be selective, manual, diagnostic, or snapshot.")
+        if self.permission_class not in {"read_only", "write_temp", "write_repo", "network", "orchestration"}:
+            raise ValueError("permission_class is not recognized.")
+
+
+@dataclass(frozen=True)
+class ToolResultEvent:
+    """Result record for a tool call issued through the AXIOM tools bridge."""
+    tool_name:        str
+    invocation_id:    str
+    status:           str
+    output_hash:      str
+    duration_ms:      float
+    run_id:           str
+    output_summary:   str = ""
+    error_type:       Optional[str] = None
+    completed_at:     str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def __post_init__(self) -> None:
+        if not self.tool_name:
+            raise ValueError("tool_name must be non-empty.")
+        if not self.invocation_id:
+            raise ValueError("invocation_id must be non-empty.")
+        if self.status not in {"ok", "error", "skipped"}:
+            raise ValueError("status must be ok, error, or skipped.")
+        _validate_sha256(self.output_hash, "output_hash")
+        _validate_positive(self.duration_ms, "duration_ms")
+        _validate_run_id(self.run_id)
+
+
+@dataclass(frozen=True)
+class ToolHealthEvent:
+    """Dependency and capability health for one registered tool adapter."""
+    tool_name:         str
+    status:            str
+    dependency_status: Dict[str, bool]
+    permission_class:  str
+    adapter_kind:      str
+    run_id:            str
+    detail:            str = ""
+    checked_at:        str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def __post_init__(self) -> None:
+        if not self.tool_name:
+            raise ValueError("tool_name must be non-empty.")
+        if self.status not in {"ready", "missing_deps", "disabled", "error"}:
+            raise ValueError("status must be ready, missing_deps, disabled, or error.")
+        if not isinstance(self.dependency_status, dict):
+            raise ValueError("dependency_status must be a dict.")
+        if self.permission_class not in {"read_only", "write_temp", "write_repo", "network", "orchestration"}:
+            raise ValueError("permission_class is not recognized.")
+        if not self.adapter_kind:
+            raise ValueError("adapter_kind must be non-empty.")
+        _validate_run_id(self.run_id)
+
+
 # ── Public interface contracts ────────────────────────────────────────────────
 
 @dataclass(frozen=True)

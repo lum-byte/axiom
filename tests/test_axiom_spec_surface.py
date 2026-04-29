@@ -38,6 +38,10 @@ REQUIRED_SPEC_FILES = [
     "axiom_tui/src/logo.rs",
     "axiom_tui/src/dispatcher.rs",
     "Makefile",
+    "Axiom.sln",
+    "AxiomRuntime.vcxproj",
+    "axicomp.sh",
+    "axicomp.cmd",
     "run_c_tests.sh",
     "run_cuda_tests.sh",
 ]
@@ -82,4 +86,3 @@ def test_loc_audit_is_honest_about_current_spec_depth() -> None:
     }
     assert all(count > 0 for count in audit.values())
     assert sum(audit.values()) >= 2000
-

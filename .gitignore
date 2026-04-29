@@ -1,18 +1,56 @@
-store/topology_router.pt
-store/structural_layer.pt
-store/recipe_registry.mmap
-store/phase_states.mmap
-store/staging/
-store/checkpoints/
-store/manifest.json
-__pycache__/
-*.pyc
-.env
-*.log
-node_modules/
+# Runtime state
+.axiom_runtime/
+.venv/
+store/
+axiom_runtime_test_store/
+offline_test_store/
+
+# Release/build output
+Releases-x64/
+dist/
 target/
+axiom_tui/target/
+tests/.bin/
 *.o
+*.obj
 *.a
+*.lib
+*.exp
+*.pdb
+*.ilk
 *.so
 *.dll
-.venv
+*.exe
+*.js.map
+
+# Generated native binaries from the old source-local layout
+alpine_strip/batch_runner
+alpine_strip/test_strip
+daemons/phase_daemon
+daemons/store_sentinel
+daemons/test_daemons
+offline/batch_scheduler
+offline/test_offline*
+axiom_runtime/axiom_runtime.dll
+axiom_runtime/libaxiom_runtime.so
+
+# Python/cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node/tooling
+node_modules/
+tools/node_modules/
+
+# Local/editor/import noise
+.env
+*.log
+logdump.txt
+*:Zone.Identifier
+.idea/workspace.xml
+
+# Internal scratch docs
+internal_docs/
