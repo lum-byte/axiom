@@ -196,6 +196,22 @@ def test_bus_payload_builder_accepts_new_tool_topics() -> None:
     assert event.tool_name == "WebFetchTool"
 
 
+def test_tools_assist_plan_keeps_signal_kernel_boundary() -> None:
+    bridge = ToolsBridge(emit_bus=False)
+    plan = bridge.assist_plan_for_query(
+        "find me latest AI news",
+        candidate_urls=["https://openai.com/news", "https://openai.com/news", "https://arxiv.org/search"],
+    )
+    tools = {stage["tool"] for stage in plan["stages"]}
+    assert plan["watermark"] == "axiom.tools.assist_plan.v1"
+    assert "WebSearchTool" in tools
+    assert "WebFetchTool" in tools
+    assert "AlpineStripTool" in tools
+    assert plan["candidate_count"] == 2
+    assert "clean_signal_acceptance" in plan["boundary"]["tag_owns"]
+    assert "recipe_execution" in plan["boundary"]["signal_kernel_owns"]
+
+
 def test_axiom_runtime_c_abi_compiles_and_handles_basic_commands(tmp_path: Path) -> None:
     gcc = shutil.which("gcc")
     if gcc is None:

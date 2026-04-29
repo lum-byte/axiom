@@ -496,7 +496,7 @@ ROUTER_VALIDATION_FRICTION_RANGE: Tuple[float, float] = (-0.01, 1.01)
 # STORE PATHS
 # ═════════════════════════════════════════════════════════════════════════════
 
-STORE_ROOT: Path = Path("/store")
+STORE_ROOT: Path = Path(os.environ.get("AXIOM_STORE_DIR", "store"))
 WEIGHTS_PATH: Path = STORE_ROOT / "topology_router.pt"
 STRUCTURAL_LAYER_PATH: Path = STORE_ROOT / "structural_layer.pt"
 STAGING_DIR: Path = STORE_ROOT / "staging"

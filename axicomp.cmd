@@ -8,9 +8,9 @@ set "PLATFORM=x64"
 set "RELEASE_ROOT=Releases-x64"
 set "WIN_BIN=%RELEASE_ROOT%\compiled\binaries\Winx64"
 set "ROOT_DLL=%RELEASE_ROOT%\axi.dll"
-set "ROOT_RUNTIME=%RELEASE_ROOT%\axirt.dll"
-set "BIN_DLL=%WIN_BIN%\axi.dll"
+set "ROOT_DEP_RESOLVER=%RELEASE_ROOT%\axi-dep-resolver.exe"
 set "BIN_RUNTIME=%WIN_BIN%\axirt.dll"
+set "BIN_DEP_RESOLVER=%WIN_BIN%\axi-dep-resolver.exe"
 
 if /I "%~1"=="clean" (
   if exist "%RELEASE_ROOT%" rmdir /s /q "%RELEASE_ROOT%"
@@ -61,13 +61,27 @@ if errorlevel 1 (
   exit /b 1
 )
 
+if exist tools\axi_dep_resolver\axi_dep_resolver.c (
+  if /I "%CC_NAME%"=="cl.exe" (
+    "%CC%" /nologo /O2 tools\axi_dep_resolver\axi_dep_resolver.c /Fe:"%BIN_DEP_RESOLVER%" shell32.lib advapi32.lib user32.lib
+  ) else (
+    "%CC%" -O2 -Wall -Wextra -municode -mwindows tools\axi_dep_resolver\axi_dep_resolver.c -o "%BIN_DEP_RESOLVER%" -lshell32 -ladvapi32 -luser32
+  )
+  if errorlevel 1 (
+    popd >nul
+    exit /b 1
+  )
+)
+
 :copy_aliases
-copy /y "%BIN_RUNTIME%" "%BIN_DLL%" >nul
-copy /y "%BIN_RUNTIME%" "%ROOT_RUNTIME%" >nul
 copy /y "%BIN_RUNTIME%" "%ROOT_DLL%" >nul
+if exist "%BIN_DEP_RESOLVER%" copy /y "%BIN_DEP_RESOLVER%" "%ROOT_DEP_RESOLVER%" >nul
+if exist "%RELEASE_ROOT%\axirt.dll" del /q "%RELEASE_ROOT%\axirt.dll"
+if exist "%RELEASE_ROOT%\axirt.so" del /q "%RELEASE_ROOT%\axirt.so"
+if exist "%WIN_BIN%\axi.dll" del /q "%WIN_BIN%\axi.dll"
 echo %ROOT_DLL%
-echo %ROOT_RUNTIME%
-echo %BIN_DLL%
 echo %BIN_RUNTIME%
+if exist "%ROOT_DEP_RESOLVER%" echo %ROOT_DEP_RESOLVER%
+if exist "%BIN_DEP_RESOLVER%" echo %BIN_DEP_RESOLVER%
 
 popd >nul

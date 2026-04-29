@@ -1,0 +1,247 @@
+# AXIOM
+
+AXIOM is a Topology-Addressed Generation runtime. The goal is to replace the usual RAG shape of "embed documents, store vectors, retrieve by similarity" with a system that treats the web as typed topology: classify the source shape, crawl the right parts, strip noise, keep signal, and expose one inference boundary.
+
+The current repo is v1.0.5 of that runtime surface. It includes the Python TAG layer, crawler pieces, signal/kernel tests, native C ABI (`axi.dll` / `axi.so`), Rust terminal runtime checks, TypeScript swarm bridge, and a standalone Python inference file that calls the native library directly.
+
+## Where The Idea Came From
+
+The design comes from the internal AXIOM notes in `internal_docs/`: model weights as the index, web pages as typed structure, signal extraction before LLM synthesis, and a single `axiom>` command surface. The imported `swarm/` tree added a useful generic task language, so AXIOM now treats swarm text as webwide crawl intent rather than a terminal-specific protocol.
+
+The practical command shape is:
+
+```text
+search | swarm -10 | depth -2 | find me latest AI news
+```
+
+Workers are clamped by the runtime. Keep the default ceiling at 10 until you intentionally raise it.
+
+## Dynamic Crawler Config
+
+Crawler source profiles, URL templates, swarm limits, and clearance policies live in:
+
+```text
+config/crawler_sources.json
+```
+
+Useful knobs:
+
+```bash
+export AXIOM_CRAWLER_SOURCE_CONFIG=/path/to/crawler_sources.json
+export AXIOM_SOURCE_DOMAINS="reuters.com,arxiv.org,openai.com"
+export AXIOM_MAX_SEARCH_SOURCES=128
+export AXIOM_LINK_EXPANSION_PER_DOC=12
+export AXIOM_NATIVE_MAX_SOURCES=32
+```
+
+Clearance policies:
+
+```bash
+export AXIOM_CLEARANCE_POLICY=standard  # CL1 only
+export AXIOM_CLEARANCE_POLICY=dev       # CL1..CL4, requires AXIOM_ENV=dev
+export AXIOM_CLEARANCE_POLICY=deep      # CL1..CL4 where available, no dev gate
+export AXIOM_CLEARANCE_POLICY=max       # CL1..CL4 requested even if availability is unknown
+export AXIOM_CLEARANCE_LEVELS=1,2,4     # explicit override
+```
+
+The fetcher currently exposes four real clearance modes, so deeper policies expand through CL1..CL4 instead of inventing fake modes.
+
+## Release Layout
+
+Build output lives under `Releases-x64/`.
+
+```text
+Releases-x64/
+  axi.dll
+  axi.so
+  axi-dep-resolver.exe
+  compiled/
+    binaries/
+      Winx64/
+        axirt.dll
+        axi-dep-resolver.exe
+      Linux64/
+        axirt.so
+```
+
+Root `axi.dll` and `axi.so` are the public aliases. Platform runtime files stay inside `compiled/binaries/*` as `axirt.dll` and `axirt.so`, so there is one obvious public library per OS at the release root.
+
+## Build
+
+Linux or WSL:
+
+```bash
+./axicomp.sh runtime-linux
+```
+
+Windows:
+
+```cmd
+axicomp.cmd
+```
+
+`axicomp.cmd` prefers Visual Studio/MSBuild through `Axiom.sln`. If Visual Studio is not available, it falls back to `cl.exe` or `gcc.exe` when one is on PATH.
+
+## Dependency Resolver
+
+Windows users can run:
+
+```cmd
+Releases-x64\axi-dep-resolver.exe
+```
+
+It is a native Win32 executable, so no JRE is needed. It asks for administrator permission when needed, shows terms, checks official vendor links, downloads safe bootstrapper files into `%LOCALAPPDATA%\Axiom\deps\downloads`, writes `%LOCALAPPDATA%\Axiom\deps\dependency-manifest.json`, opens manual download pages for tools that require license review, and adds already-installed common tool paths to the user PATH.
+
+Direct downloads:
+
+```text
+https://aka.ms/vs/17/release/vc_redist.x64.exe
+https://aka.ms/vs/17/release/vs_BuildTools.exe
+https://win.rustup.rs/x86_64
+```
+
+Manual/vendor pages opened by the resolver:
+
+```text
+https://www.python.org/downloads/windows/
+https://git-scm.com/download/win
+https://nodejs.org/en/download
+https://go.dev/dl/
+https://developer.nvidia.com/cuda-downloads
+https://www.torproject.org/download/tor/
+```
+
+Restart your terminal or AXIOM app after PATH changes.
+
+The Rust runtime checker is useful for dev machines:
+
+```bash
+cargo run --manifest-path axiom_tui/Cargo.toml -- --resolve-runtime-deep
+```
+
+It checks source files, release files, Python imports, CUDA runtime visibility, Tor, and a deep `mamba_ssm` CUDA forward pass.
+
+## Standalone Native Inference
+
+`axiom_infer.py` is the small independent inference point. It loads `axi.dll` or `axi.so` with `ctypes`, sends JSON into the native ABI, and prints the full JSON envelope.
+
+```bash
+.venv/bin/python axiom_infer.py \
+  --query "find me latest AI news" \
+  --workers 10 \
+  --depth 2
+```
+
+Compact output:
+
+```bash
+.venv/bin/python axiom_infer.py -q "last couple presidents of USA" -w 10 -d 2 --compact
+```
+
+Explicit library:
+
+```bash
+.venv/bin/python axiom_infer.py --lib Releases-x64/axi.so -q "AI model release news"
+```
+
+Python import surface:
+
+```python
+from pathlib import Path
+
+from axiom_infer import AxiomNative, build_request, find_native_library
+
+library = find_native_library()
+request = build_request("search", "find me latest AI news", workers=10, depth=2)
+
+with AxiomNative(library, store_dir=Path(".axiom_runtime/native-infer-store")) as axiom:
+    result = axiom.call(request)
+    print(result["json"])
+```
+
+## HTML Capture
+
+The crawler now keeps a tiny bounded sample of the first fetched HTML pages for debugging and extraction work. By default it saves up to 10 successful HTML-ish responses under the OS temp directory:
+
+```text
+/tmp/axiom_fetch_html/
+  01_example.com_<hash>.html
+  manifest.jsonl
+```
+
+Controls:
+
+```bash
+export AXIOM_HTML_CAPTURE_LIMIT=10
+export AXIOM_HTML_CAPTURE_DIR=/tmp/axiom_fetch_html
+export AXIOM_HTML_CAPTURE_MAX_BYTES=2097152
+```
+
+Set `AXIOM_HTML_CAPTURE_LIMIT=0` to disable it.
+
+## Terminal Interface
+
+For the `axiom>` style loop:
+
+```bash
+cd axiom_tui
+cargo run
+```
+
+Then type:
+
+```text
+axiom> search | swarm -10 | depth -2 | find me latest AI news
+axiom> fetch | https://example.com
+axiom> learn | reuters.com
+axiom> status |
+axiom> quit |
+```
+
+Set `AXIOM_TUI_ECHO=1` for local UI/parser testing without the live Python interface.
+
+## Testing
+
+Focused Python tests:
+
+```bash
+.venv/bin/python -m pytest tests/test_axiom_infer.py tests/test_dep_resolver_release.py -q
+```
+
+Full Python suite:
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+Full project suite:
+
+```bash
+make test PYTHON=.venv/bin/python
+```
+
+Native inference burn-in:
+
+```bash
+.venv/bin/python tests/probes/native_burnin.py --cycles 1000
+.venv/bin/python tests/probes/native_burnin.py --dsl 'burnin { query "find me latest AI news" workers 10 depth 2 cycles 1000; query "last couple presidents of USA" depth 2 cycles 1000; }'
+```
+
+The burn-in DSL grammar is in `tests/probes/native_burnin.gbnf`. The parser rejects duplicate normalized query strings before it launches native inference, so a burn-in suite does not accidentally hammer the same query twice. `--duration-seconds` is now a ceiling over the unique jobs supplied; if the unique job list finishes early, the probe reports `duration_exhausted_unique_queries: true`.
+
+## Python Dependencies
+
+Start with:
+
+```bash
+python -m venv .venv
+.venv/bin/python -m pip install -U pip
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m playwright install chromium
+```
+
+Key runtime imports include `aiokafka`, `aiosqlite`, `h2`, `httpx`, `inotify_simple`, `mamba_ssm`, `mmh3`, `msgpack`, `numpy`, `orjson`, `playwright`, `rich`, `structlog`, `tenacity`, and `torch`.
+
+## Notes
+
+Do not stub dependency failures. If the runtime checker fails, fix the failing dependency or mark it as explicitly optional in code and docs. AXIOM is meant to be a live crawler and signal runtime, so false green checks are worse than loud red ones.

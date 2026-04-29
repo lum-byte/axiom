@@ -478,7 +478,8 @@ SURPRISE_CONDITION3_ESCALATION_WINDOW: int = 20   # observations
 SURPRISE_CONDITION3_ESCALATION_COUNT:  int = 3    # hits → escalate to MEDIUM
 
 # ── Persistent phase mmap path (mirroring contracts STORE_FILE_NAMES) ────────
-_PHASE_MMAP_PATH: Path = Path("/store/phase_states.mmap")
+_STORE_ROOT: Path = Path(os.environ.get("AXIOM_STORE_DIR", "store"))
+_PHASE_MMAP_PATH: Path = Path(os.environ.get("AXIOM_PHASE_MMAP_PATH", str(_STORE_ROOT / "phase_states.mmap")))
 _PHASE_SLOT_BYTES: int = 32
 _PHASE_SLOT_STRUCT: struct.Struct = struct.Struct("<BBxxfxxxxxxf")  # phase, flags, _, conf, _, surprise
 

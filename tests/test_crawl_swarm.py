@@ -86,11 +86,13 @@ class CrawlSwarmTests(unittest.TestCase):
                     {"url": f"https://site{i}.example/search?q=async", "domain": f"site{i}.example", "reason": "test"}
                     for i in range(12)
                 ]
+                orchestrator._enqueue_tool_assist_plan("async http standard", candidates, "run-id")
                 documents = await orchestrator._collect_documents("async http standard", "run-id", candidates)
                 self.assertGreater(max_active, 1)
                 self.assertEqual(len({doc.domain for doc in documents}), len(documents))
                 self.assertGreaterEqual(len(attempted), 8)
                 self.assertTrue(any(item["type"] == "crawl_swarm_complete" for item in runtime.queued_work))
+                self.assertTrue(any(item["type"] == "tool_assist_plan" for item in runtime.queued_work))
 
         asyncio.run(run())
 
@@ -150,6 +152,19 @@ class CrawlSwarmTests(unittest.TestCase):
         self.assertEqual(config.requested_worker_count, 100)
         self.assertEqual(config.max_worker_count, 32)
         self.assertEqual(config.worker_count, 32)
+
+    def test_swarm_plan_expands_latest_ai_news_beyond_wikipedia(self) -> None:
+        query, plan = parse_swarm_search_payload("swarm -10 | depth -2 | find me latest AI news")
+        self.assertEqual(query, "find me latest AI news")
+        self.assertIsNotNone(plan)
+        assert plan is not None
+        domains = set(plan["seed_domains"])
+        self.assertIn("openai.com", domains)
+        self.assertIn("anthropic.com", domains)
+        self.assertIn("arxiv.org", domains)
+        self.assertIn("reuters.com", domains)
+        self.assertIn("theverge.com", domains)
+        self.assertGreater(len(domains - {"wikipedia.org", "wikidata.org"}), 8)
 
     def test_swarm_plan_prioritizes_plan_domains_in_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as td:

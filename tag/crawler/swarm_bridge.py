@@ -13,9 +13,17 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 
-from tag.crawler.swarm import AxiomCrawlSwarmConfig, DEFAULT_SWARM_WORKERS
+from tag.crawler.source_config import (
+    bounded_float_value,
+    bounded_int_value,
+    crawler_limits,
+    seed_domains_for_query,
+    source_urls_for_domains,
+    unique_domains,
+)
+from tag.crawler.swarm import AxiomCrawlSwarmConfig, ABSOLUTE_SWARM_WORKER_LIMIT, DEFAULT_SWARM_WORKERS
 
 
 AXIOM_SWARM_WATERMARK = "axiom.swarm.webwide.v1"
@@ -30,62 +38,7 @@ DOMAIN_RE = re.compile(
     re.IGNORECASE,
 )
 
-BROAD_SEED_DOMAINS = (
-    "archive.org",
-    "britannica.com",
-    "reuters.com",
-    "bbc.com",
-    "wikipedia.org",
-    "wikidata.org",
-    "loc.gov",
-    "usa.gov",
-)
-
-US_GOVERNMENT_SEED_DOMAINS = (
-    "whitehouse.gov",
-    "archives.gov",
-    "usa.gov",
-    "loc.gov",
-    "congress.gov",
-    "senate.gov",
-    "house.gov",
-    "supremecourt.gov",
-    "state.gov",
-    "britannica.com",
-    "wikipedia.org",
-)
-
-TECH_SEED_DOMAINS = (
-    "docs.python.org",
-    "developer.mozilla.org",
-    "github.com",
-    "nist.gov",
-    "ietf.org",
-    "w3.org",
-)
-
-SCIENCE_SEED_DOMAINS = (
-    "nasa.gov",
-    "nih.gov",
-    "noaa.gov",
-    "usgs.gov",
-    "energy.gov",
-    "who.int",
-)
-
-SOURCE_SITE_SEARCH_URLS = {
-    "archive.org": "https://archive.org/search?query={query}",
-    "archives.gov": "https://www.archives.gov/search?search={query}",
-    "britannica.com": "https://www.britannica.com/search?query={query}",
-    "developer.mozilla.org": "https://developer.mozilla.org/en-US/search?q={query}",
-    "docs.python.org": "https://docs.python.org/3/search.html?q={query}",
-    "github.com": "https://github.com/search?q={query}",
-    "loc.gov": "https://www.loc.gov/search/?fo=json&q={query}",
-    "reuters.com": "https://www.reuters.com/site-search/?query={query}",
-    "usa.gov": "https://search.usa.gov/search?query={query}&affiliate=usagov",
-    "wikidata.org": "https://www.wikidata.org/wiki/Special:Search?search={query}",
-    "wikipedia.org": "https://en.wikipedia.org/w/index.php?search={query}",
-}
+_LIMITS = crawler_limits()
 
 
 def parse_swarm_search_payload(payload: str) -> tuple[str, Optional[Dict[str, Any]]]:
@@ -120,26 +73,26 @@ def plan_from_generic_talk(
     text = _normalize_query_text(_extract_text(payload).strip() or default_query.strip())
     requested = requested_workers or _extract_requested_workers(payload) or DEFAULT_SWARM_WORKERS
     max_waves = depth or _extract_requested_depth(payload) or 3
-    seed_domains = _unique_domains([*extract_domains(text), *pick_seed_domains(text)])
-    source_urls = _source_urls_for_domains(text, seed_domains, reason="swarm_bridge_seed")
+    seed_domains = unique_domains([*extract_domains(text), *pick_seed_domains(text)])
+    source_urls = source_urls_for_domains(text, seed_domains, reason="swarm_bridge_seed")
     return {
         "watermark": AXIOM_SWARM_WATERMARK,
         "intent": infer_intent(text),
         "query": text,
         "worker_count": requested,
         "requested_worker_count": requested,
-        "target_documents": 12,
-        "max_waves": _bounded_int_value(max_waves, 3, 1, 8),
-        "depth": _bounded_int_value(max_waves, 3, 1, 8),
-        "early_stop_score": 12.0,
+        "target_documents": int(_LIMITS.get("target_documents", 12) or 12),
+        "max_waves": _bounded_int_value(max_waves, 3, 1, int(_LIMITS.get("max_waves", 16) or 16)),
+        "depth": _bounded_int_value(max_waves, 3, 1, int(_LIMITS.get("max_waves", 16) or 16)),
+        "early_stop_score": float(_LIMITS.get("early_stop_score", 12.0) or 12.0),
         "seed_domains": seed_domains,
         "source_urls": source_urls,
         "constraints": {
             "one_worker_per_site": True,
             "no_duplicate_site_fetch": True,
             "no_external_search_engine": True,
-            "default_worker_ceiling": 10,
-            "absolute_worker_limit": 100,
+            "default_worker_ceiling": int(_LIMITS.get("default_max_workers", 10) or 10),
+            "absolute_worker_limit": ABSOLUTE_SWARM_WORKER_LIMIT,
             "lower_compute": [
                 "dedupe_urls",
                 "dedupe_sites",
@@ -157,8 +110,8 @@ def normalize_crawl_plan(payload: Any, *, default_query: str = "") -> Dict[str, 
 
     query = _normalize_query_text(str(payload.get("query") or _extract_text(payload) or default_query).strip())
     requested = _extract_requested_workers(payload) or DEFAULT_SWARM_WORKERS
-    max_waves = _extract_requested_depth(payload) or _bounded_int_value(payload.get("max_waves"), 3, 1, 8)
-    seed_domains = _unique_domains(
+    max_waves = _extract_requested_depth(payload) or _bounded_int_value(payload.get("max_waves"), 3, 1, int(_LIMITS.get("max_waves", 16) or 16))
+    seed_domains = unique_domains(
         [
             *_normalize_domains(payload.get("seed_domains")),
             *extract_domains(query),
@@ -166,14 +119,14 @@ def normalize_crawl_plan(payload: Any, *, default_query: str = "") -> Dict[str, 
         ]
     )
     source_urls = _normalize_source_urls(payload.get("source_urls"))
-    source_urls.extend(_source_urls_for_domains(query, seed_domains, reason="swarm_bridge_seed"))
+    source_urls.extend(source_urls_for_domains(query, seed_domains, reason="swarm_bridge_seed"))
     source_urls = _unique_source_urls(source_urls)
     constraints = dict(payload.get("constraints") or {})
     constraints.setdefault("one_worker_per_site", True)
     constraints.setdefault("no_duplicate_site_fetch", True)
     constraints.setdefault("no_external_search_engine", True)
-    constraints.setdefault("default_worker_ceiling", 10)
-    constraints.setdefault("absolute_worker_limit", 100)
+    constraints.setdefault("default_worker_ceiling", int(_LIMITS.get("default_max_workers", 10) or 10))
+    constraints.setdefault("absolute_worker_limit", ABSOLUTE_SWARM_WORKER_LIMIT)
     constraints.setdefault(
         "lower_compute",
         ["dedupe_urls", "dedupe_sites", "quality_early_stop", "link_expansion_after_wave"],
@@ -184,10 +137,10 @@ def normalize_crawl_plan(payload: Any, *, default_query: str = "") -> Dict[str, 
         "query": query,
         "worker_count": requested,
         "requested_worker_count": requested,
-        "target_documents": _bounded_int_value(payload.get("target_documents"), 12, 1, 64),
-        "max_waves": _bounded_int_value(max_waves, 3, 1, 8),
-        "depth": _bounded_int_value(max_waves, 3, 1, 8),
-        "early_stop_score": _bounded_float_value(payload.get("early_stop_score"), 12.0, 1.0, 1000.0),
+        "target_documents": _bounded_int_value(payload.get("target_documents"), int(_LIMITS.get("target_documents", 12) or 12), 1, 64),
+        "max_waves": _bounded_int_value(max_waves, 3, 1, int(_LIMITS.get("max_waves", 16) or 16)),
+        "depth": _bounded_int_value(max_waves, 3, 1, int(_LIMITS.get("max_waves", 16) or 16)),
+        "early_stop_score": _bounded_float_value(payload.get("early_stop_score"), float(_LIMITS.get("early_stop_score", 12.0) or 12.0), 1.0, 1000.0),
         "seed_domains": seed_domains,
         "source_urls": source_urls,
         "constraints": constraints,
@@ -203,7 +156,7 @@ def crawl_config_from_plan(plan: Optional[Mapping[str, Any]]) -> AxiomCrawlSwarm
     return replace(
         config,
         target_documents=_bounded_int_value(plan.get("target_documents"), config.target_documents, 1, 64),
-        max_waves=_bounded_int_value(plan.get("max_waves"), config.max_waves, 1, 8),
+        max_waves=_bounded_int_value(plan.get("max_waves"), config.max_waves, 1, int(_LIMITS.get("max_waves", 16) or 16)),
         early_stop_score=_bounded_float_value(plan.get("early_stop_score"), config.early_stop_score, 1.0, 1000.0),
     )
 
@@ -218,46 +171,11 @@ def infer_intent(text: str) -> str:
 
 
 def extract_domains(text: str) -> List[str]:
-    return _unique_domains(match.group("domain") for match in DOMAIN_RE.finditer(text))
+    return unique_domains(match.group("domain") for match in DOMAIN_RE.finditer(text))
 
 
 def pick_seed_domains(text: str) -> List[str]:
-    lowered = text.lower()
-    domains: List[str] = []
-    if any(term in lowered for term in ("president", "white house", "usa", "united states", "congress")):
-        domains.extend(US_GOVERNMENT_SEED_DOMAINS)
-    if any(term in lowered for term in ("python", "javascript", "typescript", "api", "cuda", "mamba", "software", "code")):
-        domains.extend(TECH_SEED_DOMAINS)
-    if any(term in lowered for term in ("science", "space", "health", "climate", "earthquake", "medicine")):
-        domains.extend(SCIENCE_SEED_DOMAINS)
-    domains.extend(BROAD_SEED_DOMAINS)
-    return _unique_domains(domains)
-
-
-def _source_urls_for_domains(query: str, domains: Iterable[str], *, reason: str) -> List[Dict[str, Any]]:
-    quoted_query = quote(query)
-    sources: List[Dict[str, Any]] = []
-    for domain in domains:
-        search_url = SOURCE_SITE_SEARCH_URLS.get(domain, f"https://{domain}/search?q={{query}}")
-        sources.append(
-            {
-                "url": search_url.format(query=quoted_query),
-                "domain": domain,
-                "reason": reason,
-                "seeded": True,
-                "cached": False,
-            }
-        )
-        sources.append(
-            {
-                "url": f"https://{domain}/",
-                "domain": domain,
-                "reason": f"{reason}_root",
-                "seeded": True,
-                "cached": False,
-            }
-        )
-    return sources
+    return seed_domains_for_query(text)
 
 
 def _extract_text(value: Any) -> str:
@@ -305,7 +223,7 @@ def _parse_swarm_command(text: str) -> Optional[Dict[str, Any]]:
     for segment in segments[1:]:
         depth_match = DEPTH_SEGMENT_RE.match(segment)
         if depth_match:
-            depth = _bounded_int_value(depth_match.group("depth"), 3, 1, 8)
+            depth = _bounded_int_value(depth_match.group("depth"), 3, 1, _max_waves())
             continue
         query_segments.append(segment)
     return {
@@ -358,7 +276,7 @@ def _extract_requested_depth(value: Any) -> Optional[int]:
         for key in ("depth", "crawl_depth", "max_waves", "waves"):
             depth = _coerce_int(value.get(key))
             if depth is not None:
-                return _bounded_int_value(depth, 3, 1, 8)
+                return _bounded_int_value(depth, 3, 1, _max_waves())
         for key in ("constraints", "hints", "config", "options", "crawl"):
             nested = value.get(key)
             depth = _extract_requested_depth(nested)
@@ -367,9 +285,9 @@ def _extract_requested_depth(value: Any) -> Optional[int]:
     text = _extract_text(value)
     parsed = _parse_swarm_command(text)
     if parsed is not None and parsed.get("depth") is not None:
-        return _bounded_int_value(parsed.get("depth"), 3, 1, 8)
+        return _bounded_int_value(parsed.get("depth"), 3, 1, _max_waves())
     match = DEPTH_TEXT_RE.search(text)
-    return _bounded_int_value(match.group("depth"), 3, 1, 8) if match else None
+    return _bounded_int_value(match.group("depth"), 3, 1, _max_waves()) if match else None
 
 
 def _origin_context(payload: Any) -> Dict[str, Any]:
@@ -397,7 +315,7 @@ def _normalize_domains(value: Any) -> List[str]:
         raw_values = [str(item) for item in value]
     else:
         return []
-    return _unique_domains(raw_values)
+    return unique_domains(raw_values)
 
 
 def _normalize_domain(raw: str) -> str:
@@ -435,18 +353,6 @@ def _normalize_source_urls(value: Any) -> List[Dict[str, Any]]:
     return sources
 
 
-def _unique_domains(domains: Iterable[str]) -> List[str]:
-    seen: set[str] = set()
-    unique: List[str] = []
-    for raw in domains:
-        domain = _normalize_domain(str(raw))
-        if not domain or domain in seen:
-            continue
-        seen.add(domain)
-        unique.append(domain)
-    return unique
-
-
 def _unique_source_urls(sources: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     seen: set[str] = set()
     unique: List[Dict[str, Any]] = []
@@ -456,7 +362,7 @@ def _unique_source_urls(sources: Iterable[Dict[str, Any]]) -> List[Dict[str, Any
             continue
         seen.add(url)
         unique.append(source)
-    return unique[:128]
+    return unique[: _source_url_cap()]
 
 
 def _coerce_int(value: Any) -> Optional[int]:
@@ -469,15 +375,16 @@ def _coerce_int(value: Any) -> Optional[int]:
 
 
 def _bounded_int_value(value: Any, default: int, low: int, high: int) -> int:
-    parsed = _coerce_int(value)
-    if parsed is None:
-        return default
-    return max(low, min(high, parsed))
+    return bounded_int_value(value, default, low, high)
 
 
 def _bounded_float_value(value: Any, default: float, low: float, high: float) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return default
-    return max(low, min(high, parsed))
+    return bounded_float_value(value, default, low, high)
+
+
+def _max_waves() -> int:
+    return int(_LIMITS.get("max_waves", 16) or 16)
+
+
+def _source_url_cap() -> int:
+    return int(_LIMITS.get("max_search_sources", 128) or 128)

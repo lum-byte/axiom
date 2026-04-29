@@ -140,7 +140,7 @@ from signal_kernel.exceptions import (
 # Do not change without reading the rationale and load-testing the change.
 # ─────────────────────────────────────────────────────────────────────────────
 
-STORE_ROOT = Path("/store")
+STORE_ROOT = Path(os.environ.get("AXIOM_STORE_DIR", "store"))
 
 # Per-file debounce in milliseconds.
 #
@@ -275,7 +275,8 @@ class StoreWatchdog:
         WATCHDOG and call WATCHDOG.register() at initialize() time.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, store_root: Optional[Path] = None) -> None:
+        self.store_root:             Path                      = Path(store_root) if store_root is not None else STORE_ROOT
         self._watched:               Dict[str, _WatchedFile]  = {}
         self._inotify:               Optional[inotify_simple.INotify] = None
         self._wd_to_dir:             Dict[int, Path]           = {}
@@ -410,7 +411,7 @@ class StoreWatchdog:
         dirs_watched: Set[Path] = set()
 
         for path, watched in self._watched.items():
-            full_path  = STORE_ROOT / path
+            full_path  = self.store_root / path
             parent_dir = full_path.parent
 
             # Warn if parent dir missing at startup.
@@ -736,7 +737,7 @@ class StoreWatchdog:
         changed_name = event.name  # basename only; no directory component
 
         for path, watched in self._watched.items():
-            full_path = STORE_ROOT / path
+            full_path = self.store_root / path
 
             # Parent directory must match.
             if full_path.parent != parent_dir:

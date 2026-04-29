@@ -1,4 +1,6 @@
-import { pathToFileURL } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const AXIOM_SWARM_WATERMARK = 'axiom.swarm.webwide.v1'
 
@@ -40,67 +42,119 @@ export type AxiomCrawlPlan = {
 }
 
 const DEFAULT_WORKERS = 10
+const DEFAULT_MAX_WORKERS = 10
+const ABSOLUTE_WORKER_LIMIT = 100
+const DEFAULT_TARGET_DOCUMENTS = 12
+const DEFAULT_MAX_WAVES = 16
+const DEFAULT_EARLY_STOP_SCORE = 12
+const DEFAULT_SOURCE_URL_CAP = 128
 const DOMAIN_RE = /(?<!@)\b(?:https?:\/\/)?(?<domain>[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9-]{2,})+)\b/gi
 const WORKER_RE = /\bswarm\s*-(?<workers>\d{1,4})\b/i
 const DEPTH_RE = /\bdepth\s*-?(?<depth>\d{1,2})\b/i
 const SWARM_HEAD_RE = /^\s*swarm(?:\s+-(?<workers>\d{1,4}))?\s*$/i
 const DEPTH_SEGMENT_RE = /^\s*depth\s*-?(?<depth>\d{1,2})\s*$/i
 
-const broadSeedDomains = [
-  'archive.org',
-  'britannica.com',
-  'reuters.com',
-  'bbc.com',
-  'wikipedia.org',
-  'wikidata.org',
-  'loc.gov',
-  'usa.gov',
-]
+type SourceProfile = {
+  name?: string
+  always?: boolean
+  terms?: string[]
+  domains?: string[]
+}
 
-const usGovernmentSeedDomains = [
-  'whitehouse.gov',
-  'archives.gov',
-  'usa.gov',
-  'loc.gov',
-  'congress.gov',
-  'senate.gov',
-  'house.gov',
-  'supremecourt.gov',
-  'state.gov',
-  'britannica.com',
-  'wikipedia.org',
-]
+type SourceConfig = {
+  limits?: Record<string, unknown>
+  profiles?: SourceProfile[]
+  search_templates?: Record<string, string>
+}
 
-const techSeedDomains = [
-  'docs.python.org',
-  'developer.mozilla.org',
-  'github.com',
-  'nist.gov',
-  'ietf.org',
-  'w3.org',
-]
+const fallbackSourceConfig: SourceConfig = {
+  limits: {
+    default_workers: DEFAULT_WORKERS,
+    default_max_workers: DEFAULT_MAX_WORKERS,
+    absolute_worker_limit: ABSOLUTE_WORKER_LIMIT,
+    target_documents: DEFAULT_TARGET_DOCUMENTS,
+    max_waves: DEFAULT_MAX_WAVES,
+    early_stop_score: DEFAULT_EARLY_STOP_SCORE,
+    max_search_sources: DEFAULT_SOURCE_URL_CAP,
+  },
+  profiles: [],
+  search_templates: {},
+}
 
-const scienceSeedDomains = [
-  'nasa.gov',
-  'nih.gov',
-  'noaa.gov',
-  'usgs.gov',
-  'energy.gov',
-  'who.int',
-]
+function sourceConfig(): SourceConfig {
+  const explicitPath = process.env.AXIOM_CRAWLER_SOURCE_CONFIG?.trim()
+  const configPath = explicitPath || resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'config', 'crawler_sources.json')
+  try {
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as unknown
+    if (!isRecord(parsed)) return fallbackSourceConfig
+    return {
+      limits: isRecord(parsed.limits) ? parsed.limits : fallbackSourceConfig.limits,
+      profiles: Array.isArray(parsed.profiles) ? parsed.profiles.filter(isRecord).map(profile => ({
+        name: typeof profile.name === 'string' ? profile.name : undefined,
+        always: Boolean(profile.always),
+        terms: Array.isArray(profile.terms) ? profile.terms.map(String) : [],
+        domains: Array.isArray(profile.domains) ? profile.domains.map(String) : [],
+      })) : fallbackSourceConfig.profiles,
+      search_templates: isRecord(parsed.search_templates)
+        ? Object.fromEntries(Object.entries(parsed.search_templates).map(([domain, template]) => [normalizeDomain(domain), String(template)]).filter(([domain]) => domain))
+        : fallbackSourceConfig.search_templates,
+    }
+  } catch {
+    return fallbackSourceConfig
+  }
+}
 
-const siteSearchUrls: Record<string, string> = {
-  'archive.org': 'https://archive.org/search?query={query}',
-  'archives.gov': 'https://www.archives.gov/search?search={query}',
-  'britannica.com': 'https://www.britannica.com/search?query={query}',
-  'developer.mozilla.org': 'https://developer.mozilla.org/en-US/search?q={query}',
-  'docs.python.org': 'https://docs.python.org/3/search.html?q={query}',
-  'github.com': 'https://github.com/search?q={query}',
-  'loc.gov': 'https://www.loc.gov/search/?fo=json&q={query}',
-  'reuters.com': 'https://www.reuters.com/site-search/?query={query}',
-  'usa.gov': 'https://search.usa.gov/search?query={query}&affiliate=usagov',
-  'wikidata.org': 'https://www.wikidata.org/wiki/Special:Search?search={query}',
-  'wikipedia.org': 'https://en.wikipedia.org/w/index.php?search={query}',
+function sourceLimits(): Record<string, unknown> {
+  return sourceConfig().limits ?? {}
+}
+
+function limitFromConfig(name: string, fallback: number): number {
+  const value = Number(sourceLimits()[name])
+  return Number.isFinite(value) ? value : fallback
+}
+
+function configuredInt(envName: string | undefined, limitName: string, fallback: number, low: number, high: number): number {
+  const configured = envName ? process.env[envName] : undefined
+  const value = configured?.trim() ? configured : limitFromConfig(limitName, fallback)
+  return boundedInt(value, fallback, low, high)
+}
+
+function configuredFloat(envName: string | undefined, limitName: string, fallback: number, low: number, high: number): number {
+  const configured = envName ? process.env[envName] : undefined
+  const value = configured?.trim() ? configured : limitFromConfig(limitName, fallback)
+  return boundedFloat(value, fallback, low, high)
+}
+
+function absoluteWorkerLimit(): number {
+  return configuredInt(undefined, 'absolute_worker_limit', ABSOLUTE_WORKER_LIMIT, 1, 1000)
+}
+
+function maxWorkerCeiling(): number {
+  return configuredInt('AXIOM_CRAWL_MAX_WORKERS', 'default_max_workers', DEFAULT_MAX_WORKERS, 1, absoluteWorkerLimit())
+}
+
+function defaultWorkerCount(): number {
+  return configuredInt('AXIOM_CRAWL_WORKERS', 'default_workers', DEFAULT_WORKERS, 1, maxWorkerCeiling())
+}
+
+function targetDocumentCount(): number {
+  return configuredInt('AXIOM_CRAWL_TARGET_DOCS', 'target_documents', DEFAULT_TARGET_DOCUMENTS, 1, 64)
+}
+
+function maxWavesLimit(): number {
+  return configuredInt(undefined, 'max_waves', DEFAULT_MAX_WAVES, 1, 64)
+}
+
+function defaultWaveCount(): number {
+  return configuredInt('AXIOM_CRAWL_WAVES', 'default_waves', 3, 1, maxWavesLimit())
+}
+
+function earlyStopScore(): number {
+  return configuredFloat('AXIOM_CRAWL_EARLY_STOP_SCORE', 'early_stop_score', DEFAULT_EARLY_STOP_SCORE, 1, 1000)
+}
+
+function sourceUrlCap(): number {
+  return configuredInt('AXIOM_MAX_SEARCH_SOURCES', 'max_search_sources', DEFAULT_SOURCE_URL_CAP, 1, 512)
 }
 
 export function toAxiomCrawlPlan(input: unknown): AxiomCrawlPlan {
@@ -108,8 +162,8 @@ export function toAxiomCrawlPlan(input: unknown): AxiomCrawlPlan {
     return normalizePlan(input)
   }
   const query = normalizeQueryText(extractText(input).trim())
-  const requestedWorkers = extractRequestedWorkers(input) ?? DEFAULT_WORKERS
-  const depth = extractRequestedDepth(input) ?? 3
+  const requestedWorkers = extractRequestedWorkers(input) ?? defaultWorkerCount()
+  const depth = boundedInt(extractRequestedDepth(input), defaultWaveCount(), 1, maxWavesLimit())
   const seedDomains = uniqueDomains([
     ...extractDomains(query),
     ...pickSeedDomains(query),
@@ -120,18 +174,18 @@ export function toAxiomCrawlPlan(input: unknown): AxiomCrawlPlan {
     query,
     worker_count: requestedWorkers,
     requested_worker_count: requestedWorkers,
-    target_documents: 12,
+    target_documents: targetDocumentCount(),
     max_waves: depth,
     depth,
-    early_stop_score: 12,
+    early_stop_score: earlyStopScore(),
     seed_domains: seedDomains,
     source_urls: sourceUrlsForDomains(query, seedDomains),
     constraints: {
       one_worker_per_site: true,
       no_duplicate_site_fetch: true,
       no_external_search_engine: true,
-      default_worker_ceiling: 10,
-      absolute_worker_limit: 100,
+      default_worker_ceiling: maxWorkerCeiling(),
+      absolute_worker_limit: absoluteWorkerLimit(),
       lower_compute: [
         'dedupe_urls',
         'dedupe_sites',
@@ -171,24 +225,23 @@ export function inferIntent(text: string): AxiomCrawlPlan['intent'] {
 
 export function pickSeedDomains(text: string): string[] {
   const lowered = text.toLowerCase()
-  const domains: string[] = []
-  if (['president', 'white house', 'usa', 'united states', 'congress'].some(term => lowered.includes(term))) {
-    domains.push(...usGovernmentSeedDomains)
+  const matchedDomains: string[] = []
+  const fallbackDomains: string[] = []
+  for (const profile of sourceConfig().profiles ?? []) {
+    const terms = Array.isArray(profile.terms) ? profile.terms.map(term => String(term).toLowerCase()).filter(Boolean) : []
+    if (profile.always) {
+      fallbackDomains.push(...(Array.isArray(profile.domains) ? profile.domains : []))
+    } else if (terms.some(term => lowered.includes(term))) {
+      matchedDomains.push(...(Array.isArray(profile.domains) ? profile.domains : []))
+    }
   }
-  if (['python', 'javascript', 'typescript', 'api', 'cuda', 'mamba', 'software', 'code'].some(term => lowered.includes(term))) {
-    domains.push(...techSeedDomains)
-  }
-  if (['science', 'space', 'health', 'climate', 'earthquake', 'medicine'].some(term => lowered.includes(term))) {
-    domains.push(...scienceSeedDomains)
-  }
-  domains.push(...broadSeedDomains)
-  return uniqueDomains(domains)
+  return uniqueDomains([...matchedDomains, ...fallbackDomains])
 }
 
 function normalizePlan(input: Record<string, unknown>): AxiomCrawlPlan {
   const query = normalizeQueryText(String(input.query ?? extractText(input)).trim())
-  const requestedWorkers = extractRequestedWorkers(input) ?? DEFAULT_WORKERS
-  const depth = boundedInt(input.max_waves ?? input.depth ?? extractRequestedDepth(input), 3, 1, 8)
+  const requestedWorkers = extractRequestedWorkers(input) ?? defaultWorkerCount()
+  const depth = boundedInt(input.max_waves ?? input.depth ?? extractRequestedDepth(input), defaultWaveCount(), 1, maxWavesLimit())
   const seedDomains = uniqueDomains([
     ...normalizeDomainList(input.seed_domains),
     ...extractDomains(query),
@@ -200,10 +253,10 @@ function normalizePlan(input: Record<string, unknown>): AxiomCrawlPlan {
     query,
     worker_count: requestedWorkers,
     requested_worker_count: requestedWorkers,
-    target_documents: boundedInt(input.target_documents, 12, 1, 64),
+    target_documents: boundedInt(input.target_documents, targetDocumentCount(), 1, 64),
     max_waves: depth,
     depth,
-    early_stop_score: boundedFloat(input.early_stop_score, 12, 1, 1000),
+    early_stop_score: boundedFloat(input.early_stop_score, earlyStopScore(), 1, 1000),
     seed_domains: seedDomains,
     source_urls: uniqueSourceUrls([
       ...normalizeSourceUrls(input.source_urls),
@@ -213,8 +266,8 @@ function normalizePlan(input: Record<string, unknown>): AxiomCrawlPlan {
       one_worker_per_site: true,
       no_duplicate_site_fetch: true,
       no_external_search_engine: true,
-      default_worker_ceiling: 10,
-      absolute_worker_limit: 100,
+      default_worker_ceiling: maxWorkerCeiling(),
+      absolute_worker_limit: absoluteWorkerLimit(),
       lower_compute: [
         'dedupe_urls',
         'dedupe_sites',
@@ -278,7 +331,7 @@ function parseSwarmCommand(text: string): { query: string; workers?: number; dep
   for (const segment of segments.slice(1)) {
     const depthMatch = DEPTH_SEGMENT_RE.exec(segment)
     if (depthMatch?.groups?.depth) {
-      depth = boundedInt(depthMatch.groups.depth, 3, 1, 8)
+      depth = boundedInt(depthMatch.groups.depth, defaultWaveCount(), 1, maxWavesLimit())
       continue
     }
     querySegments.push(segment)
@@ -314,7 +367,7 @@ function extractRequestedDepth(input: unknown): number | undefined {
     const record = input as Record<string, unknown>
     for (const key of ['depth', 'crawl_depth', 'max_waves', 'waves']) {
       const value = coerceInt(record[key])
-      if (value !== undefined) return boundedInt(value, 3, 1, 8)
+      if (value !== undefined) return boundedInt(value, defaultWaveCount(), 1, maxWavesLimit())
     }
     for (const key of ['constraints', 'hints', 'config', 'options', 'crawl']) {
       const nested = extractRequestedDepth(record[key])
@@ -326,14 +379,15 @@ function extractRequestedDepth(input: unknown): number | undefined {
   if (parsed?.depth !== undefined) return parsed.depth
   const match = DEPTH_RE.exec(text)
   if (!match?.groups?.depth) return undefined
-  return boundedInt(match.groups.depth, 3, 1, 8)
+  return boundedInt(match.groups.depth, defaultWaveCount(), 1, maxWavesLimit())
 }
 
 function sourceUrlsForDomains(query: string, domains: string[]): AxiomSourceUrl[] {
   const encoded = encodeURIComponent(query)
   const sources: AxiomSourceUrl[] = []
+  const templates = sourceConfig().search_templates ?? {}
   for (const domain of domains) {
-    const searchUrl = siteSearchUrls[domain] ?? `https://${domain}/search?q={query}`
+    const searchUrl = templates[domain] ?? `https://${domain}/search?q={query}`
     sources.push({
       url: searchUrl.replace('{query}', encoded),
       domain,
@@ -424,7 +478,7 @@ function uniqueSourceUrls(sources: AxiomSourceUrl[]): AxiomSourceUrl[] {
     seen.add(source.url)
     unique.push(source)
   }
-  return unique.slice(0, 128)
+  return unique.slice(0, sourceUrlCap())
 }
 
 function isPlanLike(input: unknown): input is Record<string, unknown> {

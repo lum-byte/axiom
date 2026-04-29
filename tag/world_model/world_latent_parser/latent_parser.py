@@ -200,8 +200,9 @@ log: structlog.BoundLogger = structlog.get_logger("axiom.wlp.parser")
 # STORE PATHS
 # ─────────────────────────────────────────────────────────────────────────────
 
-STRUCTURAL_LAYER_PATH: Path = Path("/store/structural_layer.pt")
-WLP_MODEL_CHECKPOINT_PATH: Path = Path("/store/wlp_model_checkpoint.pt")
+_STORE_ROOT: Path = Path(os.environ.get("AXIOM_STORE_DIR", "store"))
+STRUCTURAL_LAYER_PATH: Path = Path(os.environ.get("AXIOM_STRUCTURAL_LAYER_PATH", str(_STORE_ROOT / "structural_layer.pt")))
+WLP_MODEL_CHECKPOINT_PATH: Path = Path(os.environ.get("AXIOM_WLP_MODEL_CHECKPOINT_PATH", str(_STORE_ROOT / "wlp_model_checkpoint.pt")))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # L1 CACHE ENTRY

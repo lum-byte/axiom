@@ -1,0 +1,57 @@
+[runtime]
+version = "1.0.5"
+env = "dev"
+store_dir = "store"
+autostart = false
+status_warmup = true
+status_warmup_timeout_seconds = 5.0
+status_start_watchdog = false
+
+[paths]
+runtime_root = ".axiom_runtime"
+tmp_dir = ".axiom_runtime/tmp"
+interface_socket = ".axiom_runtime/tmp/axiom_interface.sock"
+release_root = "Releases-x64"
+dead_letter_path = "store/dead_letters.jsonl"
+bus_event_log_path = "store/bus_events.log"
+html_snapshot_dir = ".axiom_runtime/tmp/html"
+fetch_staging_path = ".axiom_runtime/tmp/fetch_staging"
+tor_work_dir = ".axiom_runtime/tor"
+tor_data_dir = ".axiom_runtime/tor/data"
+torrc_path = ".axiom_runtime/tor/torrc"
+tor_bundle_root = ".axiom_runtime/deps/tor"
+
+[bus]
+hmac_min_bytes = 32
+auto_dev_hmac = true
+
+[cold_start]
+initialize_store_formats = true
+allow_zero_initialized_dev_store = true
+start_daemons = false
+self_test = false
+
+[index_daemon]
+gradient_batch_size = 32
+gradient_flush_interval_seconds = 60.0
+gradient_item_ttl_seconds = 600.0
+phase_scan_interval_seconds = 30.0
+health_log_interval_seconds = 120.0
+recipe_save_interval_seconds = 30.0
+gradient_purge_interval_seconds = 300.0
+queue_max_size = 1000
+
+[watchdog]
+enabled = true
+start = true
+
+[watchdog.debounce_ms]
+topology_router_pt = 500
+structural_layer_pt = 500
+recipe_registry_mmap = 100
+phase_states_mmap = 100
+
+[crawler]
+source_config = "config/crawler_sources.json"
+max_workers = 10
+worker_ceiling = 10

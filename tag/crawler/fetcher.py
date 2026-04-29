@@ -365,7 +365,13 @@ MAX_CONCURRENT_CL4:              Final[int]   = 1
 
 # ── Staging ───────────────────────────────────────────────────────────────────
 
-STAGING_PATH:                    Final[Path]  = Path("/tmp/fetch_staging")
+STAGING_PATH:                    Final[Path]  = Path(os.environ.get("AXIOM_FETCH_STAGING_PATH", str(Path(os.environ.get("AXIOM_TMP_DIR", tempfile.gettempdir())) / "fetch_staging")))
+HTML_CAPTURE_PATH:               Final[Path]  = Path(os.environ.get("AXIOM_HTML_SNAPSHOT_DIR", str(Path(os.environ.get("AXIOM_TMP_DIR", tempfile.gettempdir())) / "axiom_fetch_html")))
+HTML_CAPTURE_LIMIT_DEFAULT:      Final[int]   = 10
+HTML_CAPTURE_MAX_BYTES_DEFAULT:  Final[int]   = 2 * 1024 * 1024
+HTML_CAPTURE_LIMIT_ENV:          Final[str]   = "AXIOM_HTML_CAPTURE_LIMIT"
+HTML_CAPTURE_DIR_ENV:            Final[str]   = "AXIOM_HTML_CAPTURE_DIR"
+HTML_CAPTURE_MAX_BYTES_ENV:      Final[str]   = "AXIOM_HTML_CAPTURE_MAX_BYTES"
 
 # ── Telemetry / math ──────────────────────────────────────────────────────────
 
@@ -3942,6 +3948,121 @@ class StagingPipeline:
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class HtmlCaptureSink:
+    """
+    Save the first fetched HTML pages for inspection in the OS temp directory.
+
+    This is a bounded debug/export path, not crawler storage. It captures only
+    successful HTML-ish RawFetchEvents, writes atomically, and appends a small
+    JSONL manifest next to the saved files.
+    """
+
+    def __init__(
+        self,
+        capture_dir: Optional[Path] = None,
+        *,
+        limit: Optional[int] = None,
+        max_bytes: Optional[int] = None,
+    ) -> None:
+        configured_dir = os.environ.get(HTML_CAPTURE_DIR_ENV, "").strip()
+        self._dir = capture_dir or (Path(configured_dir) if configured_dir else HTML_CAPTURE_PATH)
+        self._limit = limit if limit is not None else _bounded_env_int(
+            HTML_CAPTURE_LIMIT_ENV,
+            HTML_CAPTURE_LIMIT_DEFAULT,
+            0,
+            10,
+        )
+        self._max_bytes = max_bytes if max_bytes is not None else _bounded_env_int(
+            HTML_CAPTURE_MAX_BYTES_ENV,
+            HTML_CAPTURE_MAX_BYTES_DEFAULT,
+            1024,
+            8 * 1024 * 1024,
+        )
+        self._saved_count = 0
+        self._lock = asyncio.Lock()
+
+    async def initialize(self) -> None:
+        if self._limit <= 0:
+            return
+        self._dir.mkdir(parents=True, exist_ok=True)
+
+    async def capture(self, event: RawFetchEvent) -> Optional[Path]:
+        if self._limit <= 0 or self._saved_count >= self._limit:
+            return None
+        if not self._looks_like_html(event):
+            return None
+        async with self._lock:
+            if self._saved_count >= self._limit:
+                return None
+            sequence = self._saved_count + 1
+            path = await asyncio.to_thread(self._write_capture, sequence, event)
+            self._saved_count += 1
+            return path
+
+    @property
+    def stats(self) -> Dict[str, Any]:
+        return {
+            "saved": self._saved_count,
+            "limit": self._limit,
+            "dir": str(self._dir),
+        }
+
+    def _looks_like_html(self, event: RawFetchEvent) -> bool:
+        if event.status_code < 200 or event.status_code >= 400:
+            return False
+        headers = {str(key).lower(): str(value).lower() for key, value in event.headers.items()}
+        content_type = headers.get("content-type", "")
+        if "text/html" in content_type or "application/xhtml" in content_type:
+            return True
+        prefix = event.raw_bytes[:512].lstrip().lower()
+        return prefix.startswith((b"<!doctype html", b"<html", b"<?xml"))
+
+    def _write_capture(self, sequence: int, event: RawFetchEvent) -> Path:
+        self._dir.mkdir(parents=True, exist_ok=True)
+        parsed = urlparse(event.url)
+        host = _safe_filename_part(parsed.netloc or "unknown")
+        digest = hashlib.sha256(f"{event.url}|{event.run_id}".encode("utf-8")).hexdigest()[:12]
+        final_path = self._dir / f"{sequence:02d}_{host}_{digest}.html"
+        tmp_path = final_path.with_suffix(".tmp")
+        data = event.raw_bytes[: self._max_bytes]
+        tmp_path.write_bytes(data)
+        tmp_path.replace(final_path)
+        manifest_path = self._dir / "manifest.jsonl"
+        manifest = {
+            "sequence": sequence,
+            "url": event.url,
+            "status_code": event.status_code,
+            "fetch_mode": str(getattr(event.fetch_mode, "value", event.fetch_mode)),
+            "run_id": event.run_id,
+            "manifest_id": event.manifest_id,
+            "byte_count": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "path": str(final_path),
+            "captured_unix": int(time.time()),
+            "watermark": "axiom.fetch.html_capture.v1",
+        }
+        with manifest_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(manifest, sort_keys=True) + "\n")
+        return final_path
+
+
+def _bounded_env_int(name: str, default: int, low: int, high: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(low, min(high, value))
+
+
+def _safe_filename_part(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in ".-" else "_" for ch in value.lower())
+    cleaned = cleaned.strip("._-")
+    return cleaned[:80] or "unknown"
+
+
 class TorCircuitManager:
     """
     Tor circuit lifecycle management for CL3 and CL4 fetch modes.
@@ -4345,6 +4466,7 @@ class Fetcher:
 
         # ── Staging ───────────────────────────────────────────────────
         self._staging = StagingPipeline(staging_dir)
+        self._html_capture = HtmlCaptureSink()
 
         # ── CL state ─────────────────────────────────────────────────
         self._cl_state = CLState()
@@ -4398,6 +4520,7 @@ class Fetcher:
 
         # 1. Staging
         await self._staging.initialize()
+        await self._html_capture.initialize()
         log.info("fetcher: staging pipeline ready — %s", self._staging._dir) # noqa
 
         # 2. httpx client
@@ -5110,6 +5233,13 @@ class Fetcher:
             await self._bus.emit(event)
         except Exception as exc:
             log.warning("fetcher: bus.emit(RawFetchEvent) failed: %s", exc)
+
+        try:
+            captured_path = await self._html_capture.capture(event)
+            if captured_path is not None:
+                log.info("fetcher: captured html sample â€” %s", captured_path)
+        except Exception as exc:
+            log.debug("fetcher: html capture skipped after error: %s", exc)
 
         if self._bloom:
             try:

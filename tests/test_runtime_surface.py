@@ -285,7 +285,7 @@ class RuntimeSurfaceTests(unittest.TestCase):
 
                 interface = AxiomInterface(store_dir=Path(td), runtime=runtime)
                 with (
-                    mock.patch.dict(os.environ, {"AXIOM_ENV": "dev"}, clear=False),
+                    mock.patch.dict(os.environ, {"AXIOM_ENV": "dev", "AXIOM_CLEARANCE_POLICY": "dev"}, clear=False),
                     mock.patch.object(
                         QueryOrchestrator,
                         "_run_kernel",
@@ -298,6 +298,75 @@ class RuntimeSurfaceTests(unittest.TestCase):
                 self.assertEqual(attempted_levels[:2], [1, 2])
                 self.assertGreaterEqual(len(attempted_levels), 2)
                 self.assertEqual(search.data["blocks"][0]["fetch_mode"], "headless")
+
+        asyncio.run(run())
+
+    def test_interface_deep_clearance_policy_without_dev_mode(self) -> None:
+        async def run() -> None:
+            with tempfile.TemporaryDirectory() as td:
+                runtime = AxiomRuntimeContext(store_dir=Path(td))
+                attempted_levels: list[int] = []
+
+                class FakeFetcher:
+                    cl_state = SimpleNamespace(
+                        cl1_available=True,
+                        cl2_available=True,
+                        cl3_available=False,
+                        cl4_available=False,
+                    )
+
+                    async def fetch_single(self, url: str, cl_level: int = 1, topology_hint: str = "GENERIC_HTML") -> RawFetchEvent | None:
+                        attempted_levels.append(cl_level)
+                        if cl_level == 1:
+                            return None
+                        return RawFetchEvent(
+                            url=url,
+                            raw_bytes=b"<html><body><p>Deep clearance fetch succeeded.</p></body></html>",
+                            status_code=200,
+                            headers={"content-type": "text/html; charset=utf-8"},
+                            fetch_latency=0.05,
+                            fetch_mode=FetchMode.HEADLESS,
+                            is_robots_txt=False,
+                            is_sitemap=False,
+                            topology_hint=topology_hint,
+                            run_id=str(new_run_id()),
+                            manifest_id=str(new_run_id()),
+                            byte_count=64,
+                        )
+
+                    async def shutdown(self) -> None:
+                        return None
+
+                class FakeSanitizer:
+                    def process(self, raw: bytes) -> SimpleNamespace:
+                        return SimpleNamespace(
+                            ok=True,
+                            text="Deep clearance fetch succeeded.",
+                            events=[],
+                            metrics=SimpleNamespace(),
+                        )
+
+                async def fake_ensure_crawl_stack() -> None:
+                    return None
+
+                runtime.fetcher = FakeFetcher()
+                runtime.sanitizer = FakeSanitizer()
+                runtime.classifier = False
+                runtime.ensure_crawl_stack = fake_ensure_crawl_stack  # type: ignore[assignment]
+
+                interface = AxiomInterface(store_dir=Path(td), runtime=runtime)
+                with (
+                    mock.patch.dict(os.environ, {"AXIOM_ENV": "", "AXIOM_CLEARANCE_POLICY": "deep"}, clear=False),
+                    mock.patch.object(
+                        QueryOrchestrator,
+                        "_run_kernel",
+                        new=mock.AsyncMock(return_value="Deep clearance fetch succeeded."),
+                    ),
+                ):
+                    search = await interface.handle_line("search | swarm -2 | depth -1 | deep clearance")
+
+                self.assertEqual(search.status, "ok")
+                self.assertEqual(attempted_levels[:2], [1, 2])
 
         asyncio.run(run())
 

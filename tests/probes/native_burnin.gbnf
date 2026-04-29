@@ -1,0 +1,18 @@
+root ::= ws burnin-suite ws
+
+burnin-suite ::= wrapped-suite | job-list
+wrapped-suite ::= "burnin" ws "{" ws job-list ws "}"
+job-list ::= job (ws job)*
+
+job ::= "query" ws string ws job-field* ";"
+job-field ::= workers-field | depth-field | cycles-field
+workers-field ::= "workers" ws positive-int ws
+depth-field ::= "depth" ws positive-int ws
+cycles-field ::= "cycles" ws positive-int ws
+
+positive-int ::= [1-9] [0-9]*
+string ::= "\"" string-char* "\""
+string-char ::= [^"\\] | "\\" escape-char
+escape-char ::= "\"" | "\\" | "n" | "t"
+ws ::= ([ \t\r\n] | comment)*
+comment ::= "#" [^\r\n]* ("\r"? "\n" | "")

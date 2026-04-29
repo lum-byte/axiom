@@ -65,9 +65,8 @@
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y "$(TargetPath)" "$(SolutionDir)Releases-x64\compiled\binaries\Winx64\axi.dll"
-copy /Y "$(TargetPath)" "$(SolutionDir)Releases-x64\axi.dll"
-copy /Y "$(TargetPath)" "$(SolutionDir)Releases-x64\axirt.dll"</Command>
+      <Command>copy /Y "$(TargetPath)" "$(SolutionDir)Releases-x64\axi.dll"
+if exist "$(SolutionDir)Releases-x64\compiled\binaries\Winx64\axi.dll" del /Q "$(SolutionDir)Releases-x64\compiled\binaries\Winx64\axi.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

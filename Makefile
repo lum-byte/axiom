@@ -53,9 +53,8 @@ build-rust:
 build-runtime:
 	mkdir -p $(RELEASE_ROOT) $(LINUX_BIN_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared axiom_runtime/axiom_runtime.c -o $(LINUX_BIN_DIR)/axirt.so
-	cp $(LINUX_BIN_DIR)/axirt.so $(LINUX_BIN_DIR)/axi.so
-	cp $(LINUX_BIN_DIR)/axirt.so $(RELEASE_ROOT)/axirt.so
 	cp $(LINUX_BIN_DIR)/axirt.so $(RELEASE_ROOT)/axi.so
+	rm -f $(RELEASE_ROOT)/axirt.so $(RELEASE_ROOT)/axirt.dll $(LINUX_BIN_DIR)/axi.so
 
 test: test-python test-go test-c test-cuda test-rust
 

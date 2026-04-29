@@ -1,16 +1,36 @@
-# Runtime state
+# AXIOM local runtime state
 .axiom_runtime/
-.venv/
 store/
 axiom_runtime_test_store/
 offline_test_store/
+dependency-manifest.json
 
-# Release/build output
+# Python environments and caches
+.venv/
+.venv*/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Native release and build output
 Releases-x64/
 dist/
+build/
 target/
 axiom_tui/target/
 tests/.bin/
+bin/
 *.o
 *.obj
 *.a
@@ -20,37 +40,85 @@ tests/.bin/
 *.ilk
 *.so
 *.dll
+*.dylib
 *.exe
-*.js.map
+*.out
+*.stackdump
+*.dSYM/
 
-# Generated native binaries from the old source-local layout
+# Generated native binaries from old source-local layouts
 alpine_strip/batch_runner
 alpine_strip/test_strip
+alpine_strip/libalpinestrip.so
 daemons/phase_daemon
 daemons/store_sentinel
 daemons/test_daemons
 offline/batch_scheduler
 offline/test_offline*
+offline/libaxiom_gpu.so
 axiom_runtime/axiom_runtime.dll
 axiom_runtime/libaxiom_runtime.so
 
-# Python/cache
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# CUDA / compiler scratch
+*.ptx
+*.cubin
+*.fatbin
+*.cuo
+*.ii
+*.s
+*.gcda
+*.gcno
+*.gcov
 
-# Node/tooling
+# Node / TypeScript tooling
 node_modules/
 tools/node_modules/
+swarm/node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.tsbuildinfo
+*.js.map
+.parcel-cache/
+.turbo/
+.vite/
 
-# Local/editor/import noise
-.env
+# Go and Rust local caches
+*.test
+go.work
+go.work.sum
+Cargo.lock.orig
+
+# Logs, dumps, and profiling artifacts
 *.log
 logdump.txt
-*:Zone.Identifier
-.idea/workspace.xml
+*.trace
+*.prof
+*.profraw
+*.profdata
+*.pid
+*.tmp
+*.temp
+*.bak
 
-# Internal scratch docs
+# Local secrets and machine-specific config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+
+# Editors, OS metadata, and Windows import noise
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*:Zone.Identifier
+
+# Internal scratch docs and generated reports
 internal_docs/
+reports/

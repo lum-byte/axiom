@@ -20,7 +20,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -35,6 +34,7 @@ from signal_kernel.contracts import (
     MAX_RAW_CONTENT_BYTES,
     RawFetchEvent,
     SignalExtractedEvent,
+    StoreHealthEvent,
     SystemStatus,
     TopologyClassification,
     new_run_id,
@@ -42,7 +42,17 @@ from signal_kernel.contracts import (
 from signal_kernel.pipeline import execute_sync
 from signal_kernel.recipes import registry as recipe_registry
 from signal_kernel.recipes import validator as recipe_validator
+from tag.config import apply_environment_defaults, load_config
 from tag.cold_start import ColdStart
+from tag.runtime_paths import RuntimePathResolver
+from tag.crawler.source_config import (
+    clearance_levels as configured_clearance_levels,
+    domain_article_url as configured_domain_article_url,
+    configured_source_domains,
+    domain_query_url as configured_domain_query_url,
+    link_expansion_limit,
+    max_search_sources,
+)
 from tag.crawler.swarm import AxiomCrawlSwarm, AxiomCrawlSwarmConfig
 from tag.crawler.swarm_bridge import (
     crawl_config_from_plan,
@@ -90,69 +100,9 @@ SEARCH_STOPWORDS = frozenset(
         "with",
     }
 )
-DEFAULT_MAX_SEARCH_SOURCES = 96
 MAX_SEARCH_BLOCKS = 8
 MAX_BLOCK_CHARS = 900
 MIN_BLOCK_CHARS = 80
-DEFAULT_SOURCE_DOMAINS = (
-    "archive.org",
-    "archives.gov",
-    "bbc.com",
-    "britannica.com",
-    "census.gov",
-    "congress.gov",
-    "docs.python.org",
-    "ecfr.gov",
-    "energy.gov",
-    "epa.gov",
-    "federalregister.gov",
-    "ftc.gov",
-    "github.com",
-    "house.gov",
-    "imf.org",
-    "irs.gov",
-    "justice.gov",
-    "loc.gov",
-    "nasa.gov",
-    "nationalgeographic.com",
-    "nih.gov",
-    "noaa.gov",
-    "nist.gov",
-    "nytimes.com",
-    "oecd.org",
-    "reuters.com",
-    "schema.org",
-    "senate.gov",
-    "smithsonianmag.com",
-    "state.gov",
-    "supremecourt.gov",
-    "un.org",
-    "usa.gov",
-    "usda.gov",
-    "usgs.gov",
-    "who.int",
-    "whitehouse.gov",
-    "wikidata.org",
-    "wikipedia.org",
-    "worldbank.org",
-    "wto.org",
-    "www.gov.uk",
-)
-SOURCE_DOMAIN_ENV = "AXIOM_SOURCE_DOMAINS"
-MAX_SEARCH_SOURCES_ENV = "AXIOM_MAX_SEARCH_SOURCES"
-LINK_EXPANSION_ENV = "AXIOM_LINK_EXPANSION_PER_DOC"
-SOURCE_SITE_SEARCH_URLS = {
-    "archive.org": "https://archive.org/search?query={query}",
-    "archives.gov": "https://www.archives.gov/search?search={query}",
-    "britannica.com": "https://www.britannica.com/search?query={query}",
-    "docs.python.org": "https://docs.python.org/3/search.html?q={query}",
-    "github.com": "https://github.com/search?q={query}",
-    "loc.gov": "https://www.loc.gov/search/?fo=json&q={query}",
-    "reuters.com": "https://www.reuters.com/site-search/?query={query}",
-    "usa.gov": "https://search.usa.gov/search?query={query}&affiliate=usagov",
-    "wikidata.org": "https://www.wikidata.org/wiki/Special:Search?search={query}",
-    "wikipedia.org": "https://en.wikipedia.org/w/index.php?search={query}",
-}
 
 
 @dataclass(frozen=True)
@@ -207,15 +157,33 @@ class InterfaceMetrics:
 
 
 @dataclass
+class RuntimePathCheck:
+    name: str
+    path: str
+    exists: bool
+    is_dir: bool
+    writable: bool
+    env_var: str = ""
+    env_matches: bool = True
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.__dict__.copy()
+
+
+@dataclass
 class RuntimeSnapshot:
     store_ready: bool
     cold_start_complete: bool
     index_daemon_ready: bool
+    bus_started: bool
+    bus_mode: str
     crawler_ready: bool
     learned_domains: int
     queued_work_items: int
     cached_documents: int
     daemon_status: Dict[str, Any]
+    runtime_paths: Dict[str, str] = field(default_factory=dict)
+    runtime_path_checks: List[Dict[str, Any]] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
 
@@ -295,10 +263,17 @@ class AxiomRuntimeContext:
     """
 
     def __init__(self, *, store_dir: Path = Path("store"), autostart: bool = False) -> None:
-        self.store_dir = store_dir
+        self.config = load_config()
+        apply_environment_defaults(self.config)
+        self.path_resolver = RuntimePathResolver(config=self.config)
+        store_override = None if Path(store_dir) == Path("store") else Path(store_dir)
+        self.paths = self.path_resolver.resolve(store_dir_override=store_override)
+        self.paths.apply_environment(override=True)
+        self.store_dir = self.paths.store_dir
         self.autostart = autostart
-        self.cold_start = ColdStart(store_dir=store_dir)
+        self.cold_start = ColdStart(store_dir=self.store_dir, config=self.config)
         self.index_daemon: Optional[IndexDaemon] = None
+        self.watchdog: Optional[Any] = None
         self.bus: Optional[Any] = None
         self.fetcher: Optional[Any] = None
         self.fetcher_bus_bridge: Optional[FetcherBusBridge] = None
@@ -313,6 +288,7 @@ class AxiomRuntimeContext:
         self.started = False
         self.start_result: Optional[Any] = None
         self._closing = False
+        self._watchdog_registered = False
 
     async def __aenter__(self) -> "AxiomRuntimeContext":
         await self.start()
@@ -329,30 +305,35 @@ class AxiomRuntimeContext:
             self.start_result = await asyncio.to_thread(self.cold_start.run)
             if self.start_result.ok:
                 self.index_daemon = IndexDaemon(store_dir=self.store_dir)
+                await self.index_daemon.start_background_tasks()
+                await self._ensure_store_watchdog_ready()
         self.started = True
 
     async def ensure_index_daemon(self) -> Optional[IndexDaemon]:
         phase_store = self.store_dir / "phase_states.mmap"
         if self.index_daemon is None and phase_store.exists():
             self.index_daemon = IndexDaemon(store_dir=self.store_dir)
+        if self.index_daemon is not None:
+            await self.index_daemon.start_background_tasks()
         return self.index_daemon
 
     async def ensure_crawl_stack(self) -> None:
-        if "AXIOM_BUS_HMAC_KEY" not in os.environ:
-            os.environ["AXIOM_BUS_HMAC_KEY"] = hashlib.sha256(
-                f"axiom-dev:{self.store_dir.resolve()}".encode("utf-8")
-            ).hexdigest()
+        self._ensure_runtime_paths_ready()
+        self._ensure_bus_hmac_ready()
+        if self.start_result is None:
+            self.start_result = await asyncio.to_thread(self.cold_start.run)
+            if self.start_result.ok and self.index_daemon is None:
+                self.index_daemon = IndexDaemon(store_dir=self.store_dir)
+                await self.index_daemon.start_background_tasks()
 
         await self._ensure_dev_tor_ready()
-        self.store_dir.mkdir(parents=True, exist_ok=True)
-        os.environ.setdefault("AXIOM_DEAD_LETTER_PATH", str(self.store_dir / "dead_letters.jsonl"))
-        os.environ.setdefault("AXIOM_BUS_EVENT_LOG_PATH", str(self.store_dir / "bus_events.log"))
 
         from tag.crawler.fetcher import Fetcher
         from tag.crawler_bus import CrawlerBus, TOPIC_REGISTRY
         from tag.topology.sanitize import Sanitizer
 
         await self.start()
+        await self._ensure_store_watchdog_ready()
         if self.bus is None:
             self.bus = CrawlerBus()
             await self.bus.start()
@@ -376,6 +357,55 @@ class AxiomRuntimeContext:
         if self.sanitizer is None:
             self.sanitizer = Sanitizer()
 
+    async def warm_status_stack(self) -> None:
+        if not self.config.bool("runtime.status_warmup", True):
+            return
+        timeout_s = self.config.float("runtime.status_warmup_timeout_seconds", 5.0, low=0.1, high=60.0)
+        try:
+            await asyncio.wait_for(self._warm_status_stack_impl(), timeout=timeout_s)
+            self.runtime_dependency_errors.pop("status_warmup", None)
+        except asyncio.TimeoutError:
+            self.runtime_dependency_errors["status_warmup"] = f"timed out after {timeout_s:.1f}s"
+        except Exception as exc:
+            self.runtime_dependency_errors["status_warmup"] = f"{type(exc).__name__}: {exc}"
+
+    async def _warm_status_stack_impl(self) -> None:
+        self._ensure_runtime_paths_ready()
+        self._ensure_bus_hmac_ready()
+        if self.start_result is None:
+            self.start_result = await asyncio.to_thread(self.cold_start.run)
+        if self.start_result is not None and self.start_result.ok:
+            await self.ensure_index_daemon()
+            if self.config.bool("runtime.status_start_watchdog", False):
+                await self._ensure_store_watchdog_ready()
+        if self.bus is None:
+            from tag.crawler_bus import CrawlerBus
+
+            self.bus = CrawlerBus()
+            await self.bus.start()
+        if self.fetcher is None:
+            from tag.crawler.fetcher import Fetcher
+            from tag.crawler_bus import TOPIC_REGISTRY
+
+            self.fetcher_bus_bridge = FetcherBusBridge(self.bus, TOPIC_REGISTRY)
+            self.fetcher = Fetcher(bus=self.fetcher_bus_bridge, store_dir=self.store_dir)
+        if self.classifier is None:
+            try:
+                from tag.topology.classifier import TopologyClassifier
+
+                self.classifier = TopologyClassifier(
+                    model_path=str(self.store_dir / "topology_router.pt"),
+                    phase_states_path=str(self.store_dir / "phase_states.mmap"),
+                )
+                self.runtime_dependency_errors.pop("classifier", None)
+            except Exception as exc:
+                self.runtime_dependency_errors["classifier"] = f"{type(exc).__name__}: {exc}"
+                self.classifier = False
+        if self.sanitizer is None:
+            from tag.topology.sanitize import Sanitizer
+
+            self.sanitizer = Sanitizer()
+
     async def close(self) -> None:
         if self._closing:
             return
@@ -387,6 +417,10 @@ class AxiomRuntimeContext:
         if self.bus is not None:
             await self.bus.stop()
             self.bus = None
+        if self.watchdog is not None:
+            await self.watchdog.stop()
+            self.watchdog = None
+            self._watchdog_registered = False
         if self._dev_tor_process is not None:
             self._dev_tor_process.terminate()
             try:
@@ -395,7 +429,10 @@ class AxiomRuntimeContext:
                 self._dev_tor_process.kill()
             self._dev_tor_process = None
         if self.index_daemon is not None:
-            self.index_daemon.close()
+            if hasattr(self.index_daemon, "aclose"):
+                await self.index_daemon.aclose()
+            else:
+                self.index_daemon.close()
             self.index_daemon = None
         self.classifier = None
         self.sanitizer = None
@@ -414,6 +451,93 @@ class AxiomRuntimeContext:
         item.setdefault("created_unix", int(time.time()))
         self.queued_work.append(item)
 
+    def _ensure_bus_hmac_ready(self) -> None:
+        key = os.environ.get("AXIOM_BUS_HMAC_KEY", "")
+        if key:
+            return
+        if self.env_mode in {"prod", "production", "release"}:
+            return
+        if not self.config.bool("bus.auto_dev_hmac", True):
+            return
+        os.environ["AXIOM_BUS_HMAC_KEY"] = hashlib.sha256(
+            f"axiom-dev:{self.store_dir.resolve()}".encode("utf-8")
+        ).hexdigest()
+
+    def _ensure_runtime_paths_ready(self) -> None:
+        self.paths = self.path_resolver.resolve(store_dir_override=self.store_dir)
+        self.paths.ensure_base_dirs()
+        self.paths.apply_environment(override=True)
+        self.store_dir = self.paths.store_dir
+
+    async def _ensure_store_watchdog_ready(self) -> None:
+        if not self.config.bool("watchdog.enabled", True) or not self.config.bool("watchdog.start", True):
+            return
+        if self.watchdog is not None:
+            return
+        try:
+            from tag.store_watchdog import StoreWatchdog
+        except Exception as exc:
+            self.runtime_dependency_errors["store_watchdog"] = f"{type(exc).__name__}: {exc}"
+            return
+
+        self.paths.ensure_base_dirs()
+        for dirname in ("triggers", "staging", "dead_letters", "offline_queue"):
+            (self.store_dir / dirname).mkdir(parents=True, exist_ok=True)
+        watchdog = StoreWatchdog(store_root=self.store_dir)
+        debounce = self.config.section("watchdog").get("debounce_ms", {})
+        path_to_key = {
+            "topology_router.pt": "topology_router_pt",
+            "structural_layer.pt": "structural_layer_pt",
+            "recipe_registry.mmap": "recipe_registry_mmap",
+            "phase_states.mmap": "phase_states_mmap",
+        }
+        for path, key in path_to_key.items():
+            async def handler(path: str = path) -> None:
+                await self._handle_store_reload(path)
+
+            configured_ms = debounce.get(key) if isinstance(debounce, dict) else None
+            watchdog.register(path, handler, debounce_ms=int(configured_ms) if configured_ms is not None else None)
+        try:
+            await watchdog.start()
+        except Exception as exc:
+            self.runtime_dependency_errors["store_watchdog"] = f"{type(exc).__name__}: {exc}"
+            return
+        self.watchdog = watchdog
+        self._watchdog_registered = True
+        self.runtime_dependency_errors.pop("store_watchdog", None)
+
+    async def _handle_store_reload(self, store_file: str) -> None:
+        full_path = self.store_dir / store_file
+        try:
+            size = full_path.stat().st_size
+            status = "changed"
+            detail = "debounced store reload"
+        except OSError as exc:
+            size = 0
+            status = "missing"
+            detail = f"{type(exc).__name__}: {exc}"
+        event = StoreHealthEvent(
+            store_file=store_file,
+            status=status,
+            size_bytes=size,
+            checksum_sha256=None,
+            critical=status != "changed",
+            detail=detail,
+            run_id=str(new_run_id()),
+        )
+        daemon = await self.ensure_index_daemon()
+        if daemon is not None:
+            await daemon.dispatch(event)
+        self.enqueue(
+            {
+                "type": "store_watchdog_reload",
+                "store_file": store_file,
+                "status": status,
+                "size_bytes": size,
+                "run_id": event.run_id,
+            }
+        )
+
     def remember_document(self, document: SearchDocument) -> None:
         self.document_cache[document.url] = document
         if len(self.document_cache) <= 128:
@@ -426,22 +550,78 @@ class AxiomRuntimeContext:
         daemon_status: Dict[str, Any] = {}
         if self.index_daemon is not None:
             daemon_status = self.index_daemon.status()
+        bus_started, bus_mode = self._bus_status()
+        path_checks = self._runtime_path_checks()
         errors = list(getattr(result, "errors", []) or [])
         errors.extend(
             f"{component}: {detail}"
             for component, detail in sorted(self.runtime_dependency_errors.items())
         )
+        errors.extend(
+            f"runtime path {check.name} is not writable: {check.path}"
+            for check in path_checks
+            if check.exists and check.is_dir and not check.writable
+        )
         return RuntimeSnapshot(
             store_ready=self.store_dir.exists(),
             cold_start_complete=bool(result.ok) if result is not None else self.store_dir.exists(),
             index_daemon_ready=self.index_daemon is not None,
+            bus_started=bus_started,
+            bus_mode=bus_mode,
             crawler_ready=self.fetcher is not None and self.sanitizer is not None,
             learned_domains=len(self.learned_domains),
             queued_work_items=len(self.queued_work),
             cached_documents=len(self.document_cache),
             daemon_status=daemon_status,
+            runtime_paths=self.paths.to_dict(),
+            runtime_path_checks=[check.to_dict() for check in path_checks],
             warnings=list(getattr(result, "warnings", []) or []),
             errors=errors,
+        )
+
+    def _bus_status(self) -> tuple[bool, str]:
+        if self.bus is None:
+            return False, "unstarted"
+        try:
+            health = self.bus.health()
+            return bool(getattr(health, "started", True)), str(getattr(health, "mode", "started"))
+        except Exception:
+            return True, "started"
+
+    def _runtime_path_checks(self) -> List[RuntimePathCheck]:
+        candidates: List[tuple[str, Path, str]] = [
+            ("root", self.paths.root, "AXIOM_ROOT"),
+            ("store_dir", self.paths.store_dir, "AXIOM_STORE_DIR"),
+            ("runtime_root", self.paths.runtime_root, "AXIOM_RUNTIME_ROOT"),
+            ("tmp_dir", self.paths.tmp_dir, "AXIOM_TMP_DIR"),
+            ("release_root", self.paths.release_root, "AXIOM_RELEASE_ROOT"),
+            ("html_snapshot_dir", self.paths.html_snapshot_dir, "AXIOM_HTML_SNAPSHOT_DIR"),
+            ("fetch_staging_path", self.paths.fetch_staging_path, "AXIOM_FETCH_STAGING_PATH"),
+            ("tor_work_dir", self.paths.tor_work_dir, "AXIOM_TOR_WORK_DIR"),
+        ]
+        checks = [self._path_check(name, path, env_var) for name, path, env_var in candidates]
+        for index, candidate in enumerate(self.paths.native_library_candidates(), start=1):
+            checks.append(self._path_check(f"native_library_candidate_{index}", candidate, ""))
+        return checks
+
+    @staticmethod
+    def _path_check(name: str, path: Path, env_var: str) -> RuntimePathCheck:
+        env_value = os.environ.get(env_var, "") if env_var else ""
+        exists = path.exists()
+        is_dir = path.is_dir() if exists else False
+        check_target = path if is_dir else path.parent
+        writable = check_target.exists() and os.access(check_target, os.W_OK)
+        env_matches = True
+        if env_var and env_value:
+            env_matches = Path(env_value).expanduser().resolve(strict=False) == path.resolve(strict=False)
+        return RuntimePathCheck(
+            name=name,
+            path=str(path),
+            exists=exists,
+            is_dir=is_dir,
+            writable=writable,
+            env_var=env_var,
+            env_matches=env_matches,
         )
 
     @property
@@ -461,16 +641,16 @@ class AxiomRuntimeContext:
         tor_exe = self._resolve_dev_tor_exe()
         if tor_exe is None:
             self.runtime_dependency_errors["tor"] = (
-                "Tor runtime missing: set AXIOM_TOR_EXE or install the expert bundle "
-                "under .axiom_runtime/deps/tor"
+                "Tor runtime missing: set AXIOM_TOR_EXE or configure paths.tor_bundle_root "
+                "for the expert bundle"
             )
             return
-        runtime_root = Path.cwd() / ".axiom_runtime" / "tor"
-        data_dir = runtime_root / "data"
+        runtime_root = self.paths.tor_work_dir
+        data_dir = self.paths.tor_data_dir
         tor_data_root = self._resolve_dev_tor_data_root(tor_exe)
         runtime_root.mkdir(parents=True, exist_ok=True)
         data_dir.mkdir(parents=True, exist_ok=True)
-        torrc = runtime_root / "torrc"
+        torrc = self.paths.torrc_path
         torrc_lines = [
             f'DataDirectory "{data_dir.as_posix()}"',
             "SocksPort 127.0.0.1:9050",
@@ -534,41 +714,16 @@ class AxiomRuntimeContext:
         return True
 
     def _resolve_dev_tor_exe(self) -> Optional[Path]:
-        candidates: List[Path] = []
-        env_path = os.environ.get("AXIOM_TOR_EXE", "").strip()
-        if env_path:
-            candidates.append(Path(env_path))
-        workspace_root = Path.cwd()
-        if os.name == "nt":
-            candidates.extend(
-                [
-                    workspace_root / ".axiom_runtime" / "deps" / "tor" / "tor" / "tor.exe",
-                    workspace_root / "runtime_deps" / "tor" / "tor" / "tor.exe",
-                    workspace_root / "tools" / "tor" / "tor.exe",
-                ]
-            )
-        else:
-            candidates.extend(
-                [
-                    workspace_root / ".axiom_runtime" / "deps" / "tor-linux" / "tor" / "tor",
-                    workspace_root / ".axiom_runtime" / "deps" / "tor" / "tor" / "tor",
-                    workspace_root / "runtime_deps" / "tor" / "tor" / "tor",
-                    workspace_root / "tools" / "tor" / "tor",
-                ]
-            )
-            system_tor = shutil.which("tor")
-            if system_tor:
-                candidates.append(Path(system_tor))
-        for candidate in candidates:
+        for candidate in self.paths.tor_executable_candidates(os_name=os.name):
             if candidate.exists() and self._is_usable_tor_executable(candidate):
                 return candidate
         return None
 
     def _resolve_dev_tor_data_root(self, tor_exe: Path) -> Path:
-        bundle_root = tor_exe.parent.parent
-        if (bundle_root / "data").exists():
-            return bundle_root / "data"
-        return Path.cwd() / ".axiom_runtime" / "deps" / "tor" / "data"
+        for candidate in self.paths.tor_data_candidates(tor_exe):
+            if candidate.exists():
+                return candidate
+        return self.paths.tor_data_dir
 
     def _is_usable_tor_executable(self, candidate: Path) -> bool:
         if os.name == "nt":
@@ -591,7 +746,7 @@ class QueryOrchestrator:
 
     async def handle(self, req: InterfaceRequest) -> InterfaceResponse:
         if req.query_type == "STATUS":
-            return self._status(req)
+            return await self._status(req)
         if req.query_type == "QUIT":
             await self.runtime.close()
             return InterfaceResponse(run_id=req.run_id, status="ok", message="quit accepted", data={"quit": True})
@@ -603,12 +758,13 @@ class QueryOrchestrator:
             return await self._search(req)
         return InterfaceResponse(run_id=req.run_id, status="error", message="unknown command", data={})
 
-    def _status(self, req: InterfaceRequest) -> InterfaceResponse:
+    async def _status(self, req: InterfaceRequest) -> InterfaceResponse:
+        await self.runtime.warm_status_stack()
         snapshot = self.runtime.snapshot()
         status = SystemStatus(
             run_id=req.run_id,
-            bus_started=False,
-            bus_mode="unstarted",
+            bus_started=snapshot.bus_started,
+            bus_mode=snapshot.bus_mode,
             store_ready=snapshot.store_ready,
             index_daemon_ready=snapshot.index_daemon_ready,
             cold_start_complete=snapshot.cold_start_complete,
@@ -622,6 +778,8 @@ class QueryOrchestrator:
             data={
                 **status.__dict__,
                 "daemon_status": snapshot.daemon_status,
+                "runtime_paths": snapshot.runtime_paths,
+                "runtime_path_checks": snapshot.runtime_path_checks,
                 "crawler_ready": snapshot.crawler_ready,
                 "cached_documents": snapshot.cached_documents,
                 "warnings": snapshot.warnings,
@@ -674,6 +832,7 @@ class QueryOrchestrator:
             return InterfaceResponse(run_id=req.run_id, status="error", message="query is empty", data={})
         swarm_config = crawl_config_from_plan(crawl_plan)
         candidates = self._candidate_sources(query, crawl_plan=crawl_plan)
+        self._enqueue_tool_assist_plan(query, candidates, req.run_id)
         if not candidates:
             self.runtime.enqueue({"type": "learn_from_query", "query": query, "run_id": req.run_id})
             return InterfaceResponse(
@@ -709,7 +868,7 @@ class QueryOrchestrator:
                     domains[normalized] = "swarm_plan"
         for domain in self.runtime.learned_domains:
             domains.setdefault(domain, "learned")
-        for domain in self._source_seed_domains():
+        for domain in self._source_seed_domains(query):
             domains.setdefault(domain, "source_seed")
 
         ranked: List[tuple[int, int, str, str]] = []
@@ -752,12 +911,12 @@ class QueryOrchestrator:
             for document in self.runtime.document_cache.values():
                 if document.domain == domain:
                     add_candidate(document.url, domain, "cache", cached=True, seeded=seeded)
-            if "wikipedia.org" in domain and slug:
-                wiki_host = domain if domain != "wikipedia.org" else "en.wikipedia.org"
+            article_url = configured_domain_article_url(domain, slug)
+            if article_url:
                 add_candidate(
-                    f"https://{wiki_host}/wiki/{quote(slug.replace(' ', '_'))}",
+                    article_url,
                     domain,
-                    "wikipedia_article_guess",
+                    self._source_reason(source_kind, "article_guess"),
                     seeded=seeded,
                 )
             site_search = self._domain_query_url(domain)
@@ -785,30 +944,14 @@ class QueryOrchestrator:
             return f"source_seed_{suffix}"
         return f"learned_domain_{suffix}"
 
-    def _source_seed_domains(self) -> List[str]:
-        configured = os.environ.get(SOURCE_DOMAIN_ENV, "").strip()
-        raw_domains = re.split(r"[\s,;]+", configured) if configured else list(DEFAULT_SOURCE_DOMAINS)
-        domains = {
-            domain
-            for raw in raw_domains
-            if (domain := AxiomInterface.normalize_domain(raw))
-        }
-        return sorted(domains)
+    def _source_seed_domains(self, query: str = "") -> List[str]:
+        return configured_source_domains(query)
 
     def _domain_query_url(self, domain: str) -> str:
-        if domain in SOURCE_SITE_SEARCH_URLS:
-            return SOURCE_SITE_SEARCH_URLS[domain]
-        return f"https://{domain}/search?q={{query}}"
+        return configured_domain_query_url(domain)
 
     def _max_search_sources(self) -> int:
-        raw = os.environ.get(MAX_SEARCH_SOURCES_ENV, "").strip()
-        if not raw:
-            return DEFAULT_MAX_SEARCH_SOURCES
-        try:
-            value = int(raw)
-        except ValueError:
-            return DEFAULT_MAX_SEARCH_SOURCES
-        return max(1, min(512, value))
+        return max_search_sources()
 
     def _query_terms(self, query: str) -> List[str]:
         raw_terms = [term for term in re.split(r"\W+", query.lower()) if term]
@@ -837,11 +980,36 @@ class QueryOrchestrator:
                 return cached
             return await self._fetch_document(candidate["url"], run_id, reason=candidate["reason"])
 
+        active_config = swarm_config or AxiomCrawlSwarmConfig.from_env()
+
+        async def fetch_batch(batch: List[Dict[str, Any]]) -> List[Optional[SearchDocument]]:
+            raw_results = await asyncio.gather(
+                *(fetch_candidate(candidate) for candidate in batch[: active_config.worker_count]),
+                return_exceptions=True,
+            )
+            documents: List[Optional[SearchDocument]] = []
+            for candidate, result in zip(batch, raw_results):
+                if isinstance(result, BaseException):
+                    self.runtime.enqueue(
+                        {
+                            "type": "fetch_exception",
+                            "url": candidate.get("url"),
+                            "reason": candidate.get("reason"),
+                            "error": f"{type(result).__name__}: {result}",
+                            "run_id": run_id,
+                        }
+                    )
+                    documents.append(None)
+                else:
+                    documents.append(result)
+            return documents
+
         swarm = AxiomCrawlSwarm(
             fetch_document=fetch_candidate,
+            fetch_batch=fetch_batch,
             rank_documents=lambda documents: self._rank_documents(query, documents),
             expand_document=lambda document: self._expand_document_candidates(document, query),
-            config=swarm_config or AxiomCrawlSwarmConfig.from_env(),
+            config=active_config,
         )
         swarm_result = await swarm.collect(candidates)
         documents = list(swarm_result.documents)
@@ -888,6 +1056,36 @@ class QueryOrchestrator:
             }
         )
         return summary
+
+    def _enqueue_tool_assist_plan(self, query: str, candidates: List[Dict[str, Any]], run_id: str) -> None:
+        if os.environ.get("AXIOM_TOOL_ASSIST", "1").strip().lower() in {"0", "false", "no", "off"}:
+            return
+        try:
+            from tag.tools_bridge import ToolsBridge
+
+            bridge = ToolsBridge(emit_bus=False)
+            plan = bridge.assist_plan_for_query(
+                query,
+                candidate_urls=[str(candidate.get("url", "")) for candidate in candidates[:10]],
+            )
+        except Exception as exc:
+            self.runtime.enqueue(
+                {
+                    "type": "tool_assist_unavailable",
+                    "query": query,
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "run_id": run_id,
+                }
+            )
+            return
+        self.runtime.enqueue(
+            {
+                "type": "tool_assist_plan",
+                "query": query,
+                "run_id": run_id,
+                "plan": plan,
+            }
+        )
 
     async def _fetch_document(self, url: str, run_id: str, *, reason: str) -> Optional[SearchDocument]:
         cached = self.runtime.document_cache.get(url)
@@ -954,19 +1152,7 @@ class QueryOrchestrator:
         return document
 
     def _clearance_levels(self) -> List[int]:
-        levels = [1]
-        if not self.runtime.is_dev_mode:
-            return levels
-        cl_state = getattr(self.runtime.fetcher, "cl_state", None)
-        if cl_state is None:
-            return levels
-        if getattr(cl_state, "cl2_available", False):
-            levels.append(2)
-        if getattr(cl_state, "cl3_available", False):
-            levels.append(3)
-        if getattr(cl_state, "cl4_available", False):
-            levels.append(4)
-        return levels
+        return configured_clearance_levels(self.runtime.fetcher, env_mode=self.runtime.env_mode)
 
     async def _classify_fetch(self, raw_event: RawFetchEvent, run_id: str) -> TopologyClassification:
         if self.runtime.classifier in (None, False):
@@ -1132,14 +1318,7 @@ class QueryOrchestrator:
         )
 
     def _link_expansion_limit(self) -> int:
-        raw = os.environ.get(LINK_EXPANSION_ENV, "").strip()
-        if not raw:
-            return 6
-        try:
-            value = int(raw)
-        except ValueError:
-            return 6
-        return max(0, min(32, value))
+        return link_expansion_limit()
 
     def _extract_title(self, raw_event: RawFetchEvent) -> str:
         prefix = raw_event.raw_bytes[:32768].decode("utf-8", errors="replace")
@@ -1402,12 +1581,12 @@ class InterfaceSocketServer:
         self,
         *,
         interface: Optional[AxiomInterface] = None,
-        unix_socket: Path = Path("/tmp/axiom_interface.sock"),
+        unix_socket: Optional[Path] = None,
         host: str = "127.0.0.1",
         port: int = 8766,
     ) -> None:
         self.interface = interface or AxiomInterface()
-        self.unix_socket = unix_socket
+        self.unix_socket = unix_socket or self.interface.runtime.paths.interface_socket
         self.host = host
         self.port = port
         self.server: Optional[asyncio.AbstractServer] = None
@@ -1461,18 +1640,85 @@ class InterfaceSocketServer:
             await writer.wait_closed()
 
 
+def _format_clean_result(response: InterfaceResponse, elapsed_s: float) -> str:
+    """Format a beautiful, minimal JSON result from the full response."""
+    data = response.data or {}
+    query = data.get("query", "")
+    blocks = data.get("blocks", [])
+    ts = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+    if response.status == "error":
+        return json.dumps({
+            "status": "error",
+            "message": response.message,
+            "time": ts,
+            "time_taken_s": round(elapsed_s, 3),
+            "run_id": response.run_id,
+        }, indent=2, ensure_ascii=False)
+
+    top = blocks[0] if blocks else None
+    if top:
+        return json.dumps({
+            "status": "ok",
+            "query": query,
+            "answer": top["text"],
+            "source": {
+                "url": top["url"],
+                "domain": top["domain"],
+                "title": top["title"],
+                "score": top["score"],
+            },
+            "time": ts,
+            "time_taken_s": round(elapsed_s, 3),
+            "run_id": response.run_id,
+        }, indent=2, ensure_ascii=False)
+
+    # Fallback: status/learn/quit or search with zero results
+    return json.dumps({
+        "status": response.status,
+        "query": query or None,
+        "message": response.message,
+        "time": ts,
+        "time_taken_s": round(elapsed_s, 3),
+        "run_id": response.run_id,
+    }, indent=2, ensure_ascii=False)
+
+
+def _silence_all_loggers() -> None:
+    """Redirect stderr to devnull — kills ALL debug noise unconditionally."""
+    import logging as _logging
+    import sys
+    # structlog writes directly to stderr, ignoring logging.disable().
+    # Only way to guarantee silence: redirect stderr itself.
+    # Clean JSON output uses print() → stdout, so it's unaffected.
+    sys.stderr = open(os.devnull, "w")
+    _logging.disable(_logging.INFO)
+
+
 async def serve_stdio() -> int:
+    cfg = load_config()
+    debug_mode = cfg.bool("runtime.debug", False)
+    if not debug_mode:
+        _silence_all_loggers()
+
     interface = AxiomInterface()
     loop = asyncio.get_running_loop()
     while True:
         line = await loop.run_in_executor(None, os.sys.stdin.readline)
         if not line:
             return 0
+        wall_start = time.time()
         try:
             response = await interface.handle_line(line)
         except Exception as exc:  # noqa: BLE001 - public interface returns structured error
             response = InterfaceResponse(run_id=str(new_run_id()), status="error", message=str(exc), data={"error_type": type(exc).__name__})
-        print(json.dumps(response.__dict__, sort_keys=True), flush=True)
+        elapsed_s = time.time() - wall_start
+
+        if debug_mode:
+            print(json.dumps(response.__dict__, sort_keys=True), flush=True)
+        else:
+            print(_format_clean_result(response, elapsed_s), flush=True)
+
         if response.data.get("quit"):
             return 0
 

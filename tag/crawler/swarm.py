@@ -18,16 +18,20 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Sequence
 from urllib.parse import urlparse
 
+from tag.crawler.source_config import bounded_float_value, bounded_int_value, crawler_limits
 
-DEFAULT_SWARM_WORKERS = 10
-DEFAULT_MAX_SWARM_WORKERS = 10
-ABSOLUTE_SWARM_WORKER_LIMIT = 100
-DEFAULT_TARGET_DOCUMENTS = 12
-DEFAULT_MAX_WAVES = 3
-DEFAULT_EARLY_STOP_SCORE = 12.0
+_LIMITS = crawler_limits()
+DEFAULT_SWARM_WORKERS = int(_LIMITS.get("default_workers", 10) or 10)
+DEFAULT_MAX_SWARM_WORKERS = int(_LIMITS.get("default_max_workers", DEFAULT_SWARM_WORKERS) or DEFAULT_SWARM_WORKERS)
+ABSOLUTE_SWARM_WORKER_LIMIT = int(_LIMITS.get("absolute_worker_limit", 100) or 100)
+DEFAULT_TARGET_DOCUMENTS = int(_LIMITS.get("target_documents", 12) or 12)
+DEFAULT_MAX_WAVES = int(_LIMITS.get("default_waves", 3) or 3)
+MAX_SWARM_WAVES = int(_LIMITS.get("max_waves", 16) or 16)
+DEFAULT_EARLY_STOP_SCORE = float(_LIMITS.get("early_stop_score", 12.0) or 12.0)
 
 
 FetchDocument = Callable[[Dict[str, Any]], Awaitable[Optional[Any]]]
+FetchBatch = Callable[[Sequence[Dict[str, Any]]], Awaitable[List[Optional[Any]]]]
 RankDocuments = Callable[[List[Any]], List[Dict[str, Any]]]
 ExpandDocument = Callable[[Any], Iterable[Dict[str, Any]]]
 
@@ -56,7 +60,7 @@ class AxiomCrawlSwarmConfig:
         return cls(
             worker_count=worker_count,
             target_documents=_bounded_int("AXIOM_CRAWL_TARGET_DOCS", DEFAULT_TARGET_DOCUMENTS, 1, 64),
-            max_waves=_bounded_int("AXIOM_CRAWL_WAVES", DEFAULT_MAX_WAVES, 1, 8),
+            max_waves=_bounded_int("AXIOM_CRAWL_WAVES", DEFAULT_MAX_WAVES, 1, MAX_SWARM_WAVES),
             early_stop_score=_bounded_float("AXIOM_CRAWL_EARLY_STOP_SCORE", DEFAULT_EARLY_STOP_SCORE, 1.0, 1000.0),
             requested_worker_count=requested_worker_count,
             max_worker_count=max_workers,
@@ -97,9 +101,11 @@ class AxiomCrawlSwarm:
         fetch_document: FetchDocument,
         rank_documents: RankDocuments,
         expand_document: Optional[ExpandDocument] = None,
+        fetch_batch: Optional[FetchBatch] = None,
         config: Optional[AxiomCrawlSwarmConfig] = None,
     ) -> None:
         self.fetch_document = fetch_document
+        self.fetch_batch = fetch_batch
         self.rank_documents = rank_documents
         self.expand_document = expand_document or (lambda document: ())
         self.config = config or AxiomCrawlSwarmConfig.from_env()
@@ -140,13 +146,16 @@ class AxiomCrawlSwarm:
         return result
 
     async def _run_batch(self, batch: Sequence[Dict[str, Any]]) -> List[Optional[Any]]:
+        limited_batch = list(batch[: self.config.worker_count])
+        if self.fetch_batch is not None:
+            return await self.fetch_batch(limited_batch)
         semaphore = asyncio.Semaphore(max(1, self.config.worker_count))
 
         async def run_one(candidate: Dict[str, Any]) -> Optional[Any]:
             async with semaphore:
                 return await self.fetch_document(candidate)
 
-        tasks = [asyncio.create_task(run_one(candidate)) for candidate in batch[: self.config.worker_count]]
+        tasks = [asyncio.create_task(run_one(candidate)) for candidate in limited_batch]
         if not tasks:
             return []
         return list(await asyncio.gather(*tasks))
@@ -219,21 +228,9 @@ def candidate_site(candidate: Dict[str, Any]) -> str:
 
 def _bounded_int(name: str, default: int, low: int, high: int) -> int:
     raw = os.environ.get(name, "").strip()
-    if not raw:
-        return default
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    return max(low, min(high, value))
+    return bounded_int_value(raw, default, low, high)
 
 
 def _bounded_float(name: str, default: float, low: float, high: float) -> float:
     raw = os.environ.get(name, "").strip()
-    if not raw:
-        return default
-    try:
-        value = float(raw)
-    except ValueError:
-        return default
-    return max(low, min(high, value))
+    return bounded_float_value(raw, default, low, high)

@@ -665,6 +665,88 @@ class ToolsBridge:
     def list_capabilities(self) -> List[Dict[str, Any]]:
         return [capability.to_dict() for capability in self.registry.all()]
 
+    def assist_plan_for_query(
+        self,
+        query: str,
+        *,
+        candidate_urls: Iterable[str] = (),
+        max_candidates: int = 10,
+    ) -> Dict[str, Any]:
+        """
+        Build a bounded plan for using tools/ beside TAG crawling.
+
+        This plan is advisory. TAG still owns source selection and signal
+        quality; tools can widen candidate discovery, snapshot early pages, and
+        queue native strip work for the signal kernel recipes.
+        """
+        capabilities = {capability["name"]: capability for capability in self.list_capabilities()}
+        urls = []
+        for url in candidate_urls:
+            if _valid_http_url(str(url)) and str(url) not in urls:
+                urls.append(str(url))
+            if len(urls) >= max(1, min(10, max_candidates)):
+                break
+        lowered = query.lower()
+        stages: List[Dict[str, Any]] = []
+
+        if "WebSearchTool" in capabilities and any(term in lowered for term in ("latest", "news", "today", "recent")):
+            stages.append(
+                {
+                    "stage": "candidate_expansion",
+                    "tool": "WebSearchTool",
+                    "mode": "diagnostic_seed_expansion",
+                    "reason": "recency query can benefit from temporary extra candidate discovery",
+                    "feeds": "snapshot_candidates",
+                    "never_feeds": "clean_signal",
+                }
+            )
+        if "WebFetchTool" in capabilities and urls:
+            stages.append(
+                {
+                    "stage": "early_snapshot",
+                    "tool": "WebFetchTool",
+                    "mode": "bounded_temp_snapshot",
+                    "candidate_urls": urls,
+                    "limit": len(urls),
+                    "feeds": "watermarked_tmp_artifacts",
+                    "never_feeds": "ranked_blocks_without_signal_kernel",
+                }
+            )
+        if "AlpineStripTool" in capabilities:
+            stages.append(
+                {
+                    "stage": "recipe_acceleration",
+                    "tool": "AlpineStripTool",
+                    "mode": "offline_batch_strip",
+                    "reason": "run captured HTML through native strip paths using the same topology recipe contract",
+                    "feeds": "CleanSignalEvent_candidates",
+                    "never_feeds": "unwatermarked_training_data",
+                }
+            )
+        if "WorkflowTool" in capabilities:
+            stages.append(
+                {
+                    "stage": "verification",
+                    "tool": "WorkflowTool",
+                    "mode": "health_and_test_plan",
+                    "reason": "keep tool usage auditable and test-coupled",
+                    "feeds": "ToolHealthEvent",
+                    "never_feeds": "crawler_ranking",
+                }
+            )
+
+        return {
+            "watermark": "axiom.tools.assist_plan.v1",
+            "query": query,
+            "candidate_count": len(urls),
+            "stages": stages,
+            "boundary": {
+                "tag_owns": ["source_priority", "crawler_budget", "ranked_blocks", "clean_signal_acceptance"],
+                "tools_own": ["temporary_snapshots", "diagnostic_expansion", "batch_strip_queue_lines"],
+                "signal_kernel_owns": ["recipe_execution", "sanitization_contract", "CleanSignalEvent quality"],
+            },
+        }
+
     async def publish_health(self, *, run_id: Optional[str] = None) -> List[ToolHealthEvent]:
         rid = run_id or str(new_run_id())
         events = self.registry.health_events(run_id=rid)

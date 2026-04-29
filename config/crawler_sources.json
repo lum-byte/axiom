@@ -1,0 +1,142 @@
+{
+  "version": "1.0.5",
+  "limits": {
+    "default_workers": 10,
+    "default_max_workers": 10,
+    "absolute_worker_limit": 100,
+    "target_documents": 12,
+    "default_waves": 3,
+    "max_waves": 16,
+    "early_stop_score": 12.0,
+    "max_search_sources": 96,
+    "link_expansion_per_doc": 6
+  },
+  "clearance_policies": {
+    "standard": {
+      "levels": [1],
+      "require_dev": false,
+      "respect_availability": true
+    },
+    "dev": {
+      "levels": [1, 2, 3, 4],
+      "require_dev": true,
+      "respect_availability": true
+    },
+    "deep": {
+      "levels": [1, 2, 3, 4],
+      "require_dev": false,
+      "respect_availability": true
+    },
+    "max": {
+      "levels": [1, 2, 3, 4],
+      "require_dev": false,
+      "respect_availability": false
+    }
+  },
+  "default_clearance_policy": "standard",
+  "profiles": [
+    {
+      "name": "broad",
+      "always": true,
+      "domains": [
+        "archive.org",
+        "britannica.com",
+        "reuters.com",
+        "bbc.com",
+        "wikipedia.org",
+        "wikidata.org",
+        "loc.gov",
+        "usa.gov"
+      ]
+    },
+    {
+      "name": "us_government",
+      "terms": ["president", "white house", "usa", "united states", "congress"],
+      "domains": [
+        "whitehouse.gov",
+        "archives.gov",
+        "usa.gov",
+        "loc.gov",
+        "congress.gov",
+        "senate.gov",
+        "house.gov",
+        "supremecourt.gov",
+        "state.gov",
+        "britannica.com",
+        "wikipedia.org"
+      ]
+    },
+    {
+      "name": "technology",
+      "terms": ["python", "javascript", "typescript", "api", "cuda", "mamba", "software", "code"],
+      "domains": [
+        "docs.python.org",
+        "developer.mozilla.org",
+        "github.com",
+        "nist.gov",
+        "ietf.org",
+        "w3.org"
+      ]
+    },
+    {
+      "name": "science",
+      "terms": ["science", "space", "health", "climate", "earthquake", "medicine"],
+      "domains": [
+        "nasa.gov",
+        "nih.gov",
+        "noaa.gov",
+        "usgs.gov",
+        "energy.gov",
+        "who.int"
+      ]
+    },
+    {
+      "name": "news",
+      "terms": ["latest", "news", "breaking", "today", "recent"],
+      "domains": [
+        "reuters.com",
+        "bbc.com",
+        "apnews.com",
+        "theverge.com",
+        "technologyreview.com",
+        "techcrunch.com"
+      ]
+    },
+    {
+      "name": "ai_research",
+      "terms": ["ai", "artificial intelligence", "llm", "openai", "mamba", "model", "neural"],
+      "domains": [
+        "openai.com",
+        "anthropic.com",
+        "deepmind.google",
+        "arxiv.org",
+        "semanticscholar.org",
+        "paperswithcode.com",
+        "huggingface.co",
+        "reuters.com",
+        "technologyreview.com",
+        "theverge.com"
+      ]
+    }
+  ],
+  "search_templates": {
+    "archive.org": "https://archive.org/search?query={query}",
+    "archives.gov": "https://www.archives.gov/search?search={query}",
+    "arxiv.org": "https://arxiv.org/search/?query={query}&searchtype=all&source=header",
+    "britannica.com": "https://www.britannica.com/search?query={query}",
+    "developer.mozilla.org": "https://developer.mozilla.org/en-US/search?q={query}",
+    "docs.python.org": "https://docs.python.org/3/search.html?q={query}",
+    "github.com": "https://github.com/search?q={query}",
+    "huggingface.co": "https://huggingface.co/search/full-text?q={query}",
+    "loc.gov": "https://www.loc.gov/search/?fo=json&q={query}",
+    "paperswithcode.com": "https://paperswithcode.com/search?q={query}",
+    "reuters.com": "https://www.reuters.com/site-search/?query={query}",
+    "semanticscholar.org": "https://www.semanticscholar.org/search?q={query}&sort=relevance",
+    "usa.gov": "https://search.usa.gov/search?query={query}&affiliate=usagov",
+    "wikidata.org": "https://www.wikidata.org/wiki/Special:Search?search={query}",
+    "wikipedia.org": "https://en.wikipedia.org/w/index.php?search={query}"
+  },
+  "article_templates": {
+    "wikipedia.org": "https://en.wikipedia.org/wiki/{slug}"
+  }
+}

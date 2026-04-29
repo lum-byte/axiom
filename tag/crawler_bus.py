@@ -205,7 +205,8 @@ _DEFAULT_CLIENT_CERT: str = "/certs/client.crt"
 _DEFAULT_CLIENT_KEY:  str = "/certs/client.key"
 
 # Dead letter store. Created by cold_start.py before bus.start() is called.
-_DEAD_LETTER_PATH: Path = Path(os.environ.get("AXIOM_DEAD_LETTER_PATH", "/store/dead_letters.jsonl"))
+_STORE_ROOT: Path = Path(os.environ.get("AXIOM_STORE_DIR", "store"))
+_DEAD_LETTER_PATH: Path = Path(os.environ.get("AXIOM_DEAD_LETTER_PATH", str(_STORE_ROOT / "dead_letters.jsonl")))
 
 # Kafka producer settings — tuned for throughput with bounded latency.
 _KAFKA_LINGER_MS:       int = 10          # batch for 10 ms before sending
@@ -3644,7 +3645,7 @@ class EventEnvelopeValidator:
 # This is the forensic-grade audit log for the bus coordinator.
 # ═════════════════════════════════════════════════════════════════════════════
 
-_BUS_EVENT_LOG_PATH: Path = Path(os.environ.get("AXIOM_BUS_EVENT_LOG_PATH", "/store/bus_events.log"))
+_BUS_EVENT_LOG_PATH: Path = Path(os.environ.get("AXIOM_BUS_EVENT_LOG_PATH", str(_STORE_ROOT / "bus_events.log")))
 
 # Maximum size of the bus event log before rotation (10 MB).
 _BUS_EVENT_LOG_MAX_BYTES: int = 10 * 1024 * 1024

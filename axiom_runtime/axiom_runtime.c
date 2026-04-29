@@ -21,12 +21,13 @@
 #define AXIOM_ACCESS(path, mode) access(path, mode)
 #endif
 
-#define AXIOM_RUNTIME_VERSION "0.2.0"
+#define AXIOM_RUNTIME_VERSION "1.0.5"
 #define AXIOM_MAX_FIELD 2048
 #define AXIOM_MAX_DOMAIN 256
 #define AXIOM_MAX_DOMAINS 512
 #define AXIOM_QUEUE_CAPACITY 2048
-#define AXIOM_MAX_SOURCES 5
+#define AXIOM_MAX_SOURCES 64
+#define AXIOM_DEFAULT_SOURCES 16
 #define AXIOM_RUN_ID_BYTES 64
 
 typedef struct axiom_work_item {
@@ -81,6 +82,8 @@ static void trim_ascii(char *text);
 static void make_run_id(char *out, size_t out_cap);
 static int is_http_url(const char *value);
 static int normalize_domain(const char *raw, char *out, size_t out_cap);
+static void parse_swarm_payload(const char *payload, char *query, size_t query_cap, int *workers, int *depth);
+static int parse_option_int(const char *text, const char *prefix, int fallback);
 static int ensure_runtime_store(axiom_runtime *runtime);
 static int ensure_file_size(const char *path, uint64_t required_size, axiom_store_check *check);
 static int path_join(const char *base, const char *name, char *out, size_t out_cap);
@@ -88,6 +91,9 @@ static uint64_t file_size_or_zero(const char *path, int *exists);
 static int enqueue_work(axiom_runtime *runtime, const char *kind, const char *payload, const char *run_id);
 static int add_learned_domain(axiom_runtime *runtime, const char *domain);
 static int domain_score(const char *query_lower, const char *domain);
+static int env_int_clamped(const char *name, int fallback, int low, int high);
+static size_t native_source_limit(void);
+static int token_domain_match_score(const char *domain_lower, const char *token);
 static size_t rank_sources(axiom_runtime *runtime, const char *query, size_t indices[AXIOM_MAX_SOURCES], int scores[AXIOM_MAX_SOURCES]);
 static void append_json_text(char *out, size_t out_cap, const char *text);
 static void build_sources_json(axiom_runtime *runtime, const size_t *indices, const int *scores, size_t count, char *out, size_t out_cap);
@@ -188,7 +194,7 @@ static char *handle_status(axiom_runtime *runtime, const char *run_id) {
     runtime->store_ready = ensure_runtime_store(runtime) == 0;
     char esc_store[AXIOM_MAX_FIELD * 2];
     char esc_socket[AXIOM_MAX_FIELD * 2];
-    char learned[AXIOM_MAX_FIELD * 2];
+    char learned[AXIOM_MAX_FIELD * 8];
     json_escape(runtime->store_dir, esc_store, sizeof(esc_store));
     json_escape(runtime->socket_path, esc_socket, sizeof(esc_socket));
     learned[0] = '\0';
@@ -202,7 +208,7 @@ static char *handle_status(axiom_runtime *runtime, const char *run_id) {
         strncat(learned, "\"", sizeof(learned) - strlen(learned) - 1u);
     }
     strncat(learned, "]", sizeof(learned) - strlen(learned) - 1u);
-    char data[AXIOM_MAX_FIELD * 5];
+    char data[AXIOM_MAX_FIELD * 16];
     snprintf(
         data,
         sizeof(data),
@@ -285,51 +291,75 @@ static char *handle_search(axiom_runtime *runtime, const char *run_id, const cha
         runtime->errors++;
         return json_response(run_id, "error", "query is empty", "{\"error_type\":\"EmptyPayload\"}");
     }
+    char query[AXIOM_MAX_FIELD];
+    int requested_workers = 0;
+    int depth = 0;
+    parse_swarm_payload(payload, query, sizeof(query), &requested_workers, &depth);
+    const char *effective_query = query[0] != '\0' ? query : payload;
     runtime->searches++;
     size_t indices[AXIOM_MAX_SOURCES];
     int scores[AXIOM_MAX_SOURCES];
-    size_t count = rank_sources(runtime, payload, indices, scores);
+    size_t count = rank_sources(runtime, effective_query, indices, scores);
     if (count == 0u) {
-        enqueue_work(runtime, "learn_from_query", payload, run_id);
+        enqueue_work(runtime, "learn_from_query", effective_query, run_id);
         runtime->empty++;
         char esc_query[AXIOM_MAX_FIELD * 2];
-        json_escape(payload, esc_query, sizeof(esc_query));
-        char data[AXIOM_MAX_FIELD * 3];
+        char esc_payload[AXIOM_MAX_FIELD * 2];
+        json_escape(effective_query, esc_query, sizeof(esc_query));
+        json_escape(payload, esc_payload, sizeof(esc_payload));
+        char data[AXIOM_MAX_FIELD * 8];
         snprintf(
             data,
             sizeof(data),
-            "{\"query\":\"%s\",\"sources\":[],\"queued_learning\":true,"
-            "\"search_engine\":false,\"reason\":\"no learned topology candidates\"}",
-            esc_query
+            "{\"query\":\"%s\",\"raw_payload\":\"%s\",\"sources\":[],\"blocks\":[],\"queued_learning\":true,"
+            "\"search_engine\":false,\"reason\":\"no learned topology candidates\","
+            "\"crawl_swarm\":{\"requested_worker_count\":%d,\"worker_count\":%d,"
+            "\"depth\":%d,\"max_waves\":%d,\"one_worker_per_site\":true}}",
+            esc_query,
+            esc_payload,
+            requested_workers,
+            requested_workers > 0 ? requested_workers : 0,
+            depth,
+            depth > 0 ? depth : 0
         );
         return json_response(run_id, "empty", "no learned topology candidates; learning queued", data);
     }
 
-    char sources[AXIOM_MAX_FIELD * 3];
+    char sources[AXIOM_MAX_FIELD * 8];
     build_sources_json(runtime, indices, scores, count, sources, sizeof(sources));
     char esc_query[AXIOM_MAX_FIELD * 2];
-    json_escape(payload, esc_query, sizeof(esc_query));
+    char esc_payload[AXIOM_MAX_FIELD * 2];
+    json_escape(effective_query, esc_query, sizeof(esc_query));
+    json_escape(payload, esc_payload, sizeof(esc_payload));
     char signal[AXIOM_MAX_FIELD * 2];
     snprintf(
         signal,
         sizeof(signal),
         "AXIOM routed '%s' through %zu learned topology source(s).",
-        payload,
+        effective_query,
         count
     );
     char esc_signal[AXIOM_MAX_FIELD * 4];
     json_escape(signal, esc_signal, sizeof(esc_signal));
-    char data[AXIOM_MAX_FIELD * 7];
+    char data[AXIOM_MAX_FIELD * 32];
     snprintf(
         data,
         sizeof(data),
-        "{\"query\":\"%s\",\"signal\":\"%s\",\"sources\":%s,\"topology_classes\":[\"LEARNED_DOMAIN\"],"
+        "{\"query\":\"%s\",\"raw_payload\":\"%s\",\"signal\":\"%s\",\"sources\":%s,\"blocks\":[],"
+        "\"topology_classes\":[\"LEARNED_DOMAIN\"],"
         "\"confidence\":%.3f,\"single_inference_point\":\"runtime_synthesizer\","
-        "\"search_engine\":false,\"routing\":\"wlm_source_priority_and_frontier\"}",
+        "\"search_engine\":false,\"routing\":\"wlm_source_priority_and_frontier\","
+        "\"crawl_swarm\":{\"requested_worker_count\":%d,\"worker_count\":%d,"
+        "\"depth\":%d,\"max_waves\":%d,\"one_worker_per_site\":true}}",
         esc_query,
+        esc_payload,
         esc_signal,
         sources,
-        count > 0u ? 0.72 + ((double)(count > 3u ? 3u : count) * 0.06) : 0.0
+        count > 0u ? 0.72 + ((double)(count > 3u ? 3u : count) * 0.06) : 0.0,
+        requested_workers,
+        requested_workers > 0 ? requested_workers : 0,
+        depth,
+        depth > 0 ? depth : 0
     );
     return json_response(run_id, "ok", signal, data);
 }
@@ -373,16 +403,17 @@ static size_t rank_sources(axiom_runtime *runtime, const char *query, size_t ind
     if (runtime == NULL || query == NULL || runtime->learned_count == 0u) {
         return 0u;
     }
+    size_t source_cap = native_source_limit();
     char query_lower[AXIOM_MAX_FIELD];
     snprintf(query_lower, sizeof(query_lower), "%s", query);
     lower_ascii(query_lower);
     size_t found = 0u;
     for (size_t i = 0; i < runtime->learned_count; ++i) {
         int score = domain_score(query_lower, runtime->learned_domains[i]);
-        size_t pos = found < AXIOM_MAX_SOURCES ? found++ : AXIOM_MAX_SOURCES;
-        if (pos == AXIOM_MAX_SOURCES) {
+        size_t pos = found < source_cap ? found++ : source_cap;
+        if (pos == source_cap) {
             int worst = 0;
-            for (size_t w = 1; w < AXIOM_MAX_SOURCES; ++w) {
+            for (size_t w = 1; w < source_cap; ++w) {
                 if (scores[w] < scores[worst]) worst = (int)w;
             }
             if (score <= scores[worst]) {
@@ -404,7 +435,7 @@ static size_t rank_sources(axiom_runtime *runtime, const char *query, size_t ind
             indices[j] = ti;
         }
     }
-    return found > AXIOM_MAX_SOURCES ? AXIOM_MAX_SOURCES : found;
+    return found > source_cap ? source_cap : found;
 }
 
 static int domain_score(const char *query_lower, const char *domain) {
@@ -423,15 +454,7 @@ static int domain_score(const char *query_lower, const char *domain) {
         } else {
             if (ti > 0u) {
                 token[ti] = '\0';
-                if (strstr(domain_lower, token) != NULL) {
-                    score += 3;
-                }
-                if (strcmp(token, "paper") == 0 || strcmp(token, "research") == 0 || strcmp(token, "arxiv") == 0) {
-                    if (strstr(domain_lower, "arxiv") != NULL) score += 2;
-                }
-                if (strcmp(token, "wiki") == 0 || strcmp(token, "wikipedia") == 0) {
-                    if (strstr(domain_lower, "wikipedia") != NULL) score += 2;
-                }
+                score += token_domain_match_score(domain_lower, token);
                 ti = 0u;
             }
             if (c == '\0') {
@@ -440,6 +463,56 @@ static int domain_score(const char *query_lower, const char *domain) {
         }
     }
     return score;
+}
+
+static int token_domain_match_score(const char *domain_lower, const char *token) {
+    if (domain_lower == NULL || token == NULL || token[0] == '\0') {
+        return 0;
+    }
+    size_t token_len = strlen(token);
+    if (token_len < 2u) {
+        return 0;
+    }
+    int score = 0;
+    const char *match = strstr(domain_lower, token);
+    if (match != NULL) {
+        score += token_len <= 3u ? 2 : 3;
+        int left_boundary = match == domain_lower || match[-1] == '.' || match[-1] == '-';
+        char right = match[token_len];
+        int right_boundary = right == '\0' || right == '.' || right == '-';
+        if (left_boundary && right_boundary) {
+            score += 4;
+        } else if (left_boundary || right_boundary) {
+            score += 1;
+        }
+    }
+    return score;
+}
+
+static size_t native_source_limit(void) {
+    int value = env_int_clamped("AXIOM_NATIVE_MAX_SOURCES", AXIOM_DEFAULT_SOURCES, 1, AXIOM_MAX_SOURCES);
+    return (size_t)value;
+}
+
+static int env_int_clamped(const char *name, int fallback, int low, int high) {
+    const char *raw = name != NULL ? getenv(name) : NULL;
+    if (raw == NULL || raw[0] == '\0') {
+        return fallback;
+    }
+    char *end = NULL;
+    long value = strtol(raw, &end, 10);
+    if (end == raw) {
+        return fallback;
+    }
+    while (end != NULL && *end != '\0') {
+        if (!isspace((unsigned char)*end)) {
+            return fallback;
+        }
+        end++;
+    }
+    if (value < low) return low;
+    if (value > high) return high;
+    return (int)value;
 }
 
 static void append_json_text(char *out, size_t out_cap, const char *text) {
@@ -606,6 +679,116 @@ static int is_http_url(const char *value) {
     return value != NULL && (strncmp(value, "http://", 7) == 0 || strncmp(value, "https://", 8) == 0);
 }
 
+static void parse_swarm_payload(const char *payload, char *query, size_t query_cap, int *workers, int *depth) {
+    if (query != NULL && query_cap > 0u) {
+        query[0] = '\0';
+    }
+    if (workers != NULL) *workers = 0;
+    if (depth != NULL) *depth = 0;
+    if (payload == NULL || query == NULL || query_cap == 0u) {
+        return;
+    }
+
+    char copy[AXIOM_MAX_FIELD];
+    snprintf(copy, sizeof(copy), "%s", payload);
+    char *segments[16];
+    size_t count = 0u;
+    char *cursor = copy;
+    while (cursor != NULL && count < sizeof(segments) / sizeof(segments[0])) {
+        char *pipe = strchr(cursor, '|');
+        if (pipe != NULL) {
+            *pipe = '\0';
+        }
+        trim_ascii(cursor);
+        if (cursor[0] != '\0') {
+            segments[count++] = cursor;
+        }
+        cursor = pipe != NULL ? pipe + 1 : NULL;
+    }
+    if (count == 0u) {
+        snprintf(query, query_cap, "%s", payload);
+        trim_ascii(query);
+        return;
+    }
+
+    size_t start = 0u;
+    char first[64];
+    snprintf(first, sizeof(first), "%s", segments[0]);
+    lower_ascii(first);
+    if (strcmp(first, "search") == 0) {
+        start = 1u;
+    }
+    if (start >= count) {
+        snprintf(query, query_cap, "%s", payload);
+        trim_ascii(query);
+        return;
+    }
+
+    char head[64];
+    snprintf(head, sizeof(head), "%s", segments[start]);
+    lower_ascii(head);
+    if (strncmp(head, "swarm", 5) != 0) {
+        snprintf(query, query_cap, "%s", payload);
+        trim_ascii(query);
+        return;
+    }
+    if (workers != NULL) {
+        *workers = parse_option_int(head, "swarm", 0);
+        if (*workers < 0) *workers = 0;
+        if (*workers > 100) *workers = 100;
+    }
+
+    query[0] = '\0';
+    for (size_t i = start + 1u; i < count; ++i) {
+        char lower[64];
+        snprintf(lower, sizeof(lower), "%s", segments[i]);
+        lower_ascii(lower);
+        if (strncmp(lower, "depth", 5) == 0) {
+            if (depth != NULL) {
+                *depth = parse_option_int(lower, "depth", 0);
+                if (*depth < 0) *depth = 0;
+                if (*depth > 8) *depth = 8;
+            }
+            continue;
+        }
+        if (query[0] != '\0') {
+            append_json_text(query, query_cap, " | ");
+        }
+        append_json_text(query, query_cap, segments[i]);
+    }
+    trim_ascii(query);
+    if (query[0] == '\0') {
+        snprintf(query, query_cap, "%s", payload);
+        trim_ascii(query);
+    }
+}
+
+static int parse_option_int(const char *text, const char *prefix, int fallback) {
+    if (text == NULL || prefix == NULL) {
+        return fallback;
+    }
+    const char *pos = strstr(text, prefix);
+    if (pos == NULL) {
+        return fallback;
+    }
+    pos += strlen(prefix);
+    while (*pos != '\0' && (isspace((unsigned char)*pos) || *pos == '-')) {
+        pos++;
+    }
+    if (!isdigit((unsigned char)*pos)) {
+        return fallback;
+    }
+    long value = 0;
+    while (isdigit((unsigned char)*pos)) {
+        value = (value * 10) + (*pos - '0');
+        if (value > 1000) {
+            return fallback;
+        }
+        pos++;
+    }
+    return (int)value;
+}
+
 static char *json_response(const char *run_id, const char *status, const char *message, const char *data_json) {
     char esc_run[256];
     char esc_status[64];
@@ -751,8 +934,9 @@ int main(void) {
         return 2;
     }
     axiom_free(learn);
-    char *search = axiom_handle_json(rt, "{\"command\":\"search\",\"payload\":\"latest RNA folding arxiv papers\"}");
-    if (search == NULL || strstr(search, "\"status\":\"ok\"") == NULL || strstr(search, "https://arxiv.org/") == NULL) {
+    char *search = axiom_handle_json(rt, "{\"command\":\"search\",\"payload\":\"swarm -10 | depth -2 | latest RNA folding arxiv papers\"}");
+    if (search == NULL || strstr(search, "\"status\":\"ok\"") == NULL || strstr(search, "https://arxiv.org/") == NULL ||
+        strstr(search, "\"requested_worker_count\":10") == NULL || strstr(search, "\"depth\":2") == NULL) {
         return 3;
     }
     axiom_free(search);

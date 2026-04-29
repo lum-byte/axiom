@@ -38,7 +38,7 @@ import msgpack
 from tag.crawler_bus import BUS, TOPIC_REGISTRY, event_from_payload, is_bus_started
 
 
-DEFAULT_UNIX_SOCKET = "/tmp/axiom_bus_bridge.sock"
+DEFAULT_UNIX_SOCKET = str(Path(os.environ.get("AXIOM_TMP_DIR", ".axiom_runtime/tmp")) / "axiom_bus_bridge.sock")
 DEFAULT_TCP_HOST = "127.0.0.1"
 DEFAULT_TCP_PORT = 8765
 
