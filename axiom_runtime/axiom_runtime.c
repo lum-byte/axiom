@@ -22,6 +22,9 @@
 #endif
 
 #define AXIOM_RUNTIME_VERSION "1.0.5"
+#define AXIOM_INTEGRITY_VERSION "1.0.0"
+#define AXIOM_FNV64_OFFSET 1469598103934665603ull
+#define AXIOM_FNV64_PRIME 1099511628211ull
 #define AXIOM_MAX_FIELD 2048
 #define AXIOM_MAX_DOMAIN 256
 #define AXIOM_MAX_DOMAINS 512
@@ -101,9 +104,46 @@ static char *handle_status(axiom_runtime *runtime, const char *run_id);
 static char *handle_learn(axiom_runtime *runtime, const char *run_id, const char *payload);
 static char *handle_fetch(axiom_runtime *runtime, const char *run_id, const char *payload);
 static char *handle_search(axiom_runtime *runtime, const char *run_id, const char *payload);
+static unsigned long long fnv1a_update(unsigned long long hash, const unsigned char *data, size_t size);
 
 const char *axiom_version(void) {
     return AXIOM_RUNTIME_VERSION;
+}
+
+const char *axiom_integrity_version(void) {
+    return AXIOM_INTEGRITY_VERSION;
+}
+
+unsigned long long axiom_integrity_hash_bytes(const void *data, size_t size) {
+    if (data == NULL && size > 0u) {
+        return 0ull;
+    }
+    return fnv1a_update(AXIOM_FNV64_OFFSET, (const unsigned char *)data, size);
+}
+
+int axiom_integrity_hash_file(const char *path, char *out_hex, size_t out_cap) {
+    if (path == NULL || out_hex == NULL || out_cap < 17u) {
+        return -1;
+    }
+    FILE *fp = fopen(path, "rb");
+    if (fp == NULL) {
+        out_hex[0] = '\0';
+        return -2;
+    }
+    unsigned long long hash = AXIOM_FNV64_OFFSET;
+    unsigned char buffer[8192];
+    size_t read_count = 0u;
+    while ((read_count = fread(buffer, 1u, sizeof(buffer), fp)) > 0u) {
+        hash = fnv1a_update(hash, buffer, read_count);
+    }
+    if (ferror(fp)) {
+        fclose(fp);
+        out_hex[0] = '\0';
+        return -3;
+    }
+    fclose(fp);
+    snprintf(out_hex, out_cap, "%016llx", hash);
+    return 0;
 }
 
 axiom_runtime *axiom_init(const char *config_json) {
@@ -362,6 +402,17 @@ static char *handle_search(axiom_runtime *runtime, const char *run_id, const cha
         depth > 0 ? depth : 0
     );
     return json_response(run_id, "ok", signal, data);
+}
+
+static unsigned long long fnv1a_update(unsigned long long hash, const unsigned char *data, size_t size) {
+    if (data == NULL) {
+        return hash;
+    }
+    for (size_t i = 0u; i < size; ++i) {
+        hash ^= (unsigned long long)data[i];
+        hash *= AXIOM_FNV64_PRIME;
+    }
+    return hash;
 }
 
 static int enqueue_work(axiom_runtime *runtime, const char *kind, const char *payload, const char *run_id) {

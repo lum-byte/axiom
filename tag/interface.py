@@ -16,7 +16,10 @@ from __future__ import annotations
 import asyncio
 import collections
 import contextlib
+import html
 import hashlib
+import inspect
+import io
 import json
 import os
 import re
@@ -61,6 +64,7 @@ from tag.crawler.swarm_bridge import (
     plan_from_generic_talk,
 )
 from tag.index_daemon import IndexDaemon
+from tag.integrity_sentinel import mark_block, start_once_per_login
 
 
 COMMAND_RE = re.compile(r"^\s*(search|fetch|learn|status|quit)\s*\|\s*(.*?)\s*$", re.IGNORECASE)
@@ -263,6 +267,7 @@ class AxiomRuntimeContext:
     """
 
     def __init__(self, *, store_dir: Path = Path("store"), autostart: bool = False) -> None:
+        mark_block("runtime.context.init")
         self.config = load_config()
         apply_environment_defaults(self.config)
         self.path_resolver = RuntimePathResolver(config=self.config)
@@ -299,6 +304,7 @@ class AxiomRuntimeContext:
         await self.close()
 
     async def start(self) -> None:
+        mark_block("runtime.context.start")
         if self.started:
             return
         if self.autostart:
@@ -310,6 +316,7 @@ class AxiomRuntimeContext:
         self.started = True
 
     async def ensure_index_daemon(self) -> Optional[IndexDaemon]:
+        mark_block("runtime.index_daemon.ensure")
         phase_store = self.store_dir / "phase_states.mmap"
         if self.index_daemon is None and phase_store.exists():
             self.index_daemon = IndexDaemon(store_dir=self.store_dir)
@@ -318,6 +325,7 @@ class AxiomRuntimeContext:
         return self.index_daemon
 
     async def ensure_crawl_stack(self) -> None:
+        mark_block("runtime.crawl_stack.ensure")
         self._ensure_runtime_paths_ready()
         self._ensure_bus_hmac_ready()
         if self.start_result is None:
@@ -337,11 +345,13 @@ class AxiomRuntimeContext:
         if self.bus is None:
             self.bus = CrawlerBus()
             await self.bus.start()
+            mark_block("runtime.bus.ready")
         if self.fetcher is None:
             self.fetcher_bus_bridge = FetcherBusBridge(self.bus, TOPIC_REGISTRY)
             self.fetcher = Fetcher(bus=self.fetcher_bus_bridge, store_dir=self.store_dir)
         if hasattr(self.fetcher, "is_initialized") and not self.fetcher.is_initialized:
             await self.fetcher.initialize()
+            mark_block("runtime.fetcher.ready")
         if self.classifier is None:
             try:
                 from tag.topology.classifier import TopologyClassifier
@@ -356,6 +366,7 @@ class AxiomRuntimeContext:
                 self.classifier = False
         if self.sanitizer is None:
             self.sanitizer = Sanitizer()
+            mark_block("runtime.sanitizer.ready")
 
     async def warm_status_stack(self) -> None:
         if not self.config.bool("runtime.status_warmup", True):
@@ -843,6 +854,7 @@ class QueryOrchestrator:
             )
         documents = await self._collect_documents(query, req.run_id, candidates, swarm_config=swarm_config)
         ranked_blocks = self._rank_documents(query, documents)
+        answer = self._build_answer(query, ranked_blocks)
         signal = await self._synthesize(query, ranked_blocks, candidates)
         return InterfaceResponse(
             run_id=req.run_id,
@@ -852,6 +864,7 @@ class QueryOrchestrator:
                 "query": query,
                 "sources": candidates,
                 "blocks": ranked_blocks,
+                "answer": answer,
                 "single_inference_point": "tag.interface.QueryOrchestrator._synthesize",
                 "search_engine": False,
                 "crawl_swarm": self._crawl_swarm_summary(crawl_plan, swarm_config),
@@ -891,6 +904,14 @@ class QueryOrchestrator:
             candidates.append({"url": url, "domain": domain, "reason": reason, "cached": cached, "seeded": seeded})
 
         if crawl_plan is not None:
+            if self._prefer_article_guess(query):
+                for domain in crawl_plan.get("seed_domains", []):
+                    normalized = AxiomInterface.normalize_domain(str(domain))
+                    if not normalized:
+                        continue
+                    article_url = configured_domain_article_url(normalized, slug)
+                    if article_url:
+                        add_candidate(article_url, normalized, "swarm_plan_article_guess", seeded=True)
             for source in crawl_plan.get("source_urls", []):
                 if not isinstance(source, dict):
                     continue
@@ -966,6 +987,19 @@ class QueryOrchestrator:
             terms = terms[1:]
         return " ".join(term.capitalize() for term in terms[:8])
 
+    def _prefer_article_guess(self, query: str) -> bool:
+        lowered = re.sub(r"\s+", " ", query.lower()).strip()
+        return lowered.startswith(
+            (
+                "what is ",
+                "what are ",
+                "who is ",
+                "who was ",
+                "where is ",
+                "when was ",
+            )
+        )
+
     async def _collect_documents(
         self,
         query: str,
@@ -974,11 +1008,18 @@ class QueryOrchestrator:
         *,
         swarm_config: Optional[AxiomCrawlSwarmConfig] = None,
     ) -> List[SearchDocument]:
+        mark_block("crawler.swarm.collect")
         async def fetch_candidate(candidate: Dict[str, Any]) -> Optional[SearchDocument]:
             cached = self.runtime.document_cache.get(candidate["url"])
             if cached is not None:
                 return cached
-            return await self._fetch_document(candidate["url"], run_id, reason=candidate["reason"])
+            fetch_kwargs: Dict[str, Any] = {"reason": candidate["reason"]}
+            try:
+                if "query" in inspect.signature(self._fetch_document).parameters:
+                    fetch_kwargs["query"] = query
+            except (TypeError, ValueError):
+                pass
+            return await self._fetch_document(candidate["url"], run_id, **fetch_kwargs)
 
         active_config = swarm_config or AxiomCrawlSwarmConfig.from_env()
 
@@ -1087,7 +1128,8 @@ class QueryOrchestrator:
             }
         )
 
-    async def _fetch_document(self, url: str, run_id: str, *, reason: str) -> Optional[SearchDocument]:
+    async def _fetch_document(self, url: str, run_id: str, *, reason: str, query: str = "") -> Optional[SearchDocument]:
+        mark_block("crawler.fetch_document")
         cached = self.runtime.document_cache.get(url)
         if cached is not None:
             return cached
@@ -1099,11 +1141,18 @@ class QueryOrchestrator:
         raw_event: Optional[RawFetchEvent] = None
         for cl_level in self._clearance_levels():
             attempted_levels.append(cl_level)
-            raw_event = await self.runtime.fetcher.fetch_single(
-                url,
-                cl_level=cl_level,
-                topology_hint="GENERIC_HTML",
-            )
+            fetch_single = self.runtime.fetcher.fetch_single
+            kwargs: Dict[str, Any] = {
+                "url": url,
+                "cl_level": cl_level,
+                "topology_hint": "GENERIC_HTML",
+            }
+            try:
+                if "dedupe" in inspect.signature(fetch_single).parameters:
+                    kwargs["dedupe"] = False
+            except (TypeError, ValueError):
+                pass
+            raw_event = await fetch_single(**kwargs)
             if raw_event is not None:
                 break
         if raw_event is None:
@@ -1118,10 +1167,14 @@ class QueryOrchestrator:
             )
             return None
         classification = await self._classify_fetch(raw_event, run_id)
+        readable_text = self._extract_readable_text(raw_event.raw_bytes, raw_event.headers)
         clean_result = self.runtime.sanitizer.process(raw_event.raw_bytes)
         clean_text = clean_result.text.strip() if clean_result.ok else ""
         kernel_signal = await self._run_kernel(raw_event, classification, run_id)
-        blocks = self._split_text_blocks(kernel_signal or clean_text)
+        signal_text = self._select_signal_text(query=query, candidates=[kernel_signal, clean_text, readable_text])
+        if not clean_text and readable_text:
+            clean_text = readable_text
+        blocks = self._split_text_blocks(signal_text)
         document = SearchDocument(
             url=raw_event.url,
             domain=AxiomInterface.normalize_domain(raw_event.url),
@@ -1355,6 +1408,74 @@ class QueryOrchestrator:
             blocks.append(normalized.strip()[:MAX_BLOCK_CHARS])
         return blocks[:24]
 
+    def _extract_readable_text(self, raw_bytes: bytes, headers: Dict[str, str]) -> str:
+        content_type = str(headers.get("content-type", "")).lower()
+        raw_text = raw_bytes[:MAX_RAW_CONTENT_BYTES].decode("utf-8", errors="replace")
+        if not raw_text.strip():
+            return ""
+        if "json" in content_type or raw_text.lstrip().startswith(("{", "[")):
+            try:
+                payload = json.loads(raw_text)
+            except json.JSONDecodeError:
+                return self._compact_plain_text(raw_text)
+            strings: List[str] = []
+            self._collect_json_strings(payload, strings)
+            return self._compact_plain_text("\n".join(strings))
+        text = re.sub(r"(?is)<(script|style|noscript|template|svg|canvas)\b.*?</\1>", " ", raw_text)
+        text = re.sub(r"(?i)<\s*(br|p|div|li|tr|td|th|h[1-6]|section|article|header|footer)\b[^>]*>", "\n", text)
+        text = TAG_RE.sub(" ", text)
+        return self._compact_plain_text(html.unescape(text))
+
+    def _collect_json_strings(self, value: Any, strings: List[str], *, depth: int = 0) -> None:
+        if depth > 8 or len(strings) >= 512:
+            return
+        if isinstance(value, str):
+            cleaned = self._compact_plain_text(value)
+            if len(cleaned) >= 24:
+                strings.append(cleaned)
+            return
+        if isinstance(value, list):
+            for item in value[:128]:
+                self._collect_json_strings(item, strings, depth=depth + 1)
+            return
+        if isinstance(value, dict):
+            preferred_keys = ("title", "name", "description", "summary", "snippet", "extract", "content", "text")
+            for key in preferred_keys:
+                if key in value:
+                    self._collect_json_strings(value[key], strings, depth=depth + 1)
+            for key, item in list(value.items())[:128]:
+                if key not in preferred_keys:
+                    self._collect_json_strings(item, strings, depth=depth + 1)
+
+    def _compact_plain_text(self, text: str) -> str:
+        lines = []
+        for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            compact = re.sub(r"\s+", " ", line).strip()
+            if not compact:
+                continue
+            if self._looks_like_css_or_code_noise(compact):
+                continue
+            lines.append(compact)
+        return "\n\n".join(lines)
+
+    def _select_signal_text(self, *, query: str, candidates: List[str]) -> str:
+        usable = [text.strip() for text in candidates if text and text.strip()]
+        if not usable:
+            return ""
+        return max(usable, key=lambda text: (self._text_quality_score(query, text), len(text)))
+
+    def _text_quality_score(self, query: str, text: str) -> float:
+        compact = re.sub(r"\s+", " ", text).strip()
+        if not compact:
+            return -1000.0
+        terms = self._query_terms(query)
+        score = min(len(compact) / 500.0, 6.0)
+        score += sum(1 for term in terms if term in compact.lower())
+        score -= self._noise_penalty(compact)
+        if self._definition_cue_score(query, compact) > 0:
+            score += 4.0
+        return score
+
     def _rank_documents(self, query: str, documents: List[SearchDocument]) -> List[Dict[str, Any]]:
         terms = self._query_terms(query)
         ranked: List[Dict[str, Any]] = []
@@ -1368,6 +1489,10 @@ class QueryOrchestrator:
                 score = float(term_hits * 3 + title_hits * 2)
                 score += min(document.classification_confidence, 1.0)
                 score += min(len(block) / 600.0, 1.5)
+                score += self._definition_cue_score(query, block)
+                score += self._subject_definition_score(query, block)
+                score -= self._search_page_penalty(document, block)
+                score -= self._noise_penalty(block)
                 ranked.append(
                     {
                         "url": document.url,
@@ -1401,6 +1526,143 @@ class QueryOrchestrator:
         for index, item in enumerate(ranked, start=1):
             item["rank"] = index
         return ranked
+
+    def _definition_cue_score(self, query: str, text: str) -> float:
+        terms = self._query_terms(query)
+        if not terms:
+            return 0.0
+        lowered = re.sub(r"\s+", " ", text.lower())
+        score = 0.0
+        for term in terms[:4]:
+            if re.search(rf"\b{re.escape(term)}\b[^.!?]{{0,120}}\b(is|are|was|were|refers to|means|describes)\b", lowered):
+                score += 4.0
+            if re.search(rf"\b(is|are|was|were|called|known as)\b[^.!?]{{0,120}}\b{re.escape(term)}\b", lowered):
+                score += 1.5
+        return min(score, 8.0)
+
+    def _subject_definition_score(self, query: str, text: str) -> float:
+        terms = self._query_terms(query)
+        if not terms:
+            return 0.0
+        phrase = r"\s+".join(re.escape(term) for term in terms[:4])
+        first = re.escape(terms[0])
+        lowered = re.sub(r"\s+", " ", text.lower()).strip(" -:;")
+        head = lowered[:260]
+        present_copula = r"(?:is|are|refers to|means)"
+        past_copula = r"(?:was|were)"
+        asks_present = re.match(r"^(what|who|where)\s+(is|are)\b", query.lower().strip()) is not None
+        present_subject = rf"{phrase}\b(?:\s*\([^)]{{1,120}}\))?(?:\s+{phrase}\b)?\s+{present_copula}\b"
+        past_subject = rf"{phrase}\b(?:\s*\([^)]{{1,120}}\))?(?:\s+{phrase}\b)?\s+{past_copula}\b"
+        if re.match(present_subject, head):
+            return 11.0 if asks_present else 9.0
+        if re.search(rf"\b{present_subject}", head):
+            return 7.0 if asks_present else 6.0
+        if re.match(past_subject, head):
+            return 2.0 if asks_present else 9.0
+        if re.search(rf"\b{past_subject}", head):
+            return 1.0 if asks_present else 6.0
+        if re.match(rf"{first}\s+(?!{present_copula}\b|{past_copula}\b|\(|,|:)", head):
+            return -2.0
+        return 0.0
+
+    def _search_page_penalty(self, document: SearchDocument, block: str) -> float:
+        lowered_title = document.title.lower()
+        lowered_url = document.url.lower()
+        penalty = 0.0
+        if "search result" in lowered_title or lowered_title.startswith("search |"):
+            penalty += 2.5
+        if any(marker in lowered_url for marker in ("/search", "search?", "site-search", "special:search", "w/index.php?search=")):
+            penalty += 1.5
+        if "you searched for:" in block.lower():
+            penalty -= 1.0
+        return penalty
+
+    def _noise_penalty(self, text: str) -> float:
+        if not text:
+            return 10.0
+        sample = text[:2000]
+        punctuation = sum(1 for ch in sample if ch in "{}[];:=<>")
+        ratio = punctuation / max(1, len(sample))
+        penalty = ratio * 18.0
+        lowered = sample.lower()
+        noisy_markers = ("ve-init-", "mw-parser-output", "function(", "var ", "stylesheet", "<svg", "{\"")
+        penalty += sum(1.5 for marker in noisy_markers if marker in lowered)
+        if self._looks_like_css_or_code_noise(sample):
+            penalty += 4.0
+        return penalty
+
+    def _looks_like_css_or_code_noise(self, text: str) -> bool:
+        sample = text[:1000].strip()
+        if not sample:
+            return False
+        css_tokens = sample.count("{") + sample.count("}") + sample.count(";")
+        if css_tokens >= 8 and css_tokens > len(sample.split()) / 3:
+            return True
+        if len(re.findall(r"\.[a-zA-Z0-9_-]+\s*\{", sample)) >= 2:
+            return True
+        return False
+
+    def _build_answer(self, query: str, blocks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not blocks:
+            return None
+        best: Optional[tuple[float, Dict[str, Any], str]] = None
+        for block in blocks:
+            text = str(block.get("text") or "")
+            sentence = self._best_answer_sentence(query, text)
+            if not sentence:
+                sentence = re.sub(r"\s+", " ", text).strip()[:700]
+            sentence_score = self._definition_cue_score(query, sentence) + float(block.get("score", 0.0))
+            sentence_score -= self._noise_penalty(sentence)
+            if best is None or sentence_score > best[0]:
+                best = (sentence_score, block, sentence)
+        if best is None:
+            return None
+        _, block, sentence = best
+        return {
+            "text": sentence,
+            "source": {
+                "url": block.get("url"),
+                "domain": block.get("domain"),
+                "title": block.get("title"),
+                "score": block.get("score"),
+                "rank": block.get("rank"),
+            },
+        }
+
+    def _best_answer_sentence(self, query: str, text: str) -> str:
+        compact = re.sub(r"\s+", " ", text).strip()
+        if not compact:
+            return ""
+        compact = re.sub(r"^.*?\bYou searched for:\s*", "", compact, flags=re.IGNORECASE)
+        sentences = re.split(r"(?<=[.!?])\s+", compact)
+        terms = self._query_terms(query)
+        best_sentence = ""
+        best_score = -1000.0
+        for sentence in sentences:
+            cleaned = sentence.strip(" -:;")
+            if len(cleaned) < 24:
+                continue
+            lowered = cleaned.lower()
+            term_hits = sum(1 for term in terms if term in lowered)
+            score = float(term_hits * 2)
+            score += self._definition_cue_score(query, cleaned)
+            score += self._subject_definition_score(query, cleaned)
+            score -= self._noise_penalty(cleaned)
+            if 60 <= len(cleaned) <= 420:
+                score += 1.0
+            if score > best_score:
+                best_sentence = cleaned
+                best_score = score
+        return self._clean_answer_text(best_sentence)[:700]
+
+    def _clean_answer_text(self, text: str) -> str:
+        cleaned = re.sub(r"\(\s*/[^)]{1,160}/[^)]{0,80}\)", "", text)
+        cleaned = re.sub(r"\(\s*pronunciation[^)]{0,160}\)", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+        cleaned = re.sub(r"\(\s+", "(", cleaned)
+        cleaned = re.sub(r"\s+\)", ")", cleaned)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        return cleaned.strip()
 
     def _diversify_ranked_blocks(self, ranked: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if len(ranked) <= MAX_SEARCH_BLOCKS:
@@ -1645,12 +1907,24 @@ def _format_clean_result(response: InterfaceResponse, elapsed_s: float) -> str:
     data = response.data or {}
     query = data.get("query", "")
     blocks = data.get("blocks", [])
+    answer = data.get("answer") if isinstance(data.get("answer"), dict) else None
     ts = time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
     if response.status == "error":
         return json.dumps({
             "status": "error",
             "message": response.message,
+            "time": ts,
+            "time_taken_s": round(elapsed_s, 3),
+            "run_id": response.run_id,
+        }, indent=2, ensure_ascii=False)
+
+    if answer and answer.get("text"):
+        return json.dumps({
+            "status": "ok",
+            "query": query,
+            "answer": answer.get("text"),
+            "source": answer.get("source"),
             "time": ts,
             "time_taken_s": round(elapsed_s, 3),
             "run_id": response.run_id,
@@ -1684,40 +1958,73 @@ def _format_clean_result(response: InterfaceResponse, elapsed_s: float) -> str:
     }, indent=2, ensure_ascii=False)
 
 
-def _silence_all_loggers() -> None:
-    """Redirect stderr to devnull — kills ALL debug noise unconditionally."""
-    import sys
-    # structlog, sanitizer, bus, pipeline — all write to stderr.
-    # Clean JSON output uses print() → stdout, unaffected.
-    sys.stderr = open(os.devnull, "w")
+def _capture_preview(buffer: io.StringIO) -> Dict[str, Any]:
+    captured = buffer.getvalue()
+    buffer.seek(0)
+    buffer.truncate(0)
+    lines = [line for line in captured.splitlines() if line.strip()]
+    return {"captured_lines": len(lines), "preview": lines[:8]}
 
 
-async def serve_stdio() -> int:
-    cfg = load_config()
-    debug_mode = cfg.bool("runtime.debug", False)
-    if not debug_mode:
-        _silence_all_loggers()
-
-    interface = AxiomInterface()
-    loop = asyncio.get_running_loop()
+async def _serve_stdio_loop(
+    interface: AxiomInterface,
+    loop: asyncio.AbstractEventLoop,
+    public_stdout: Any,
+    *,
+    debug_mode: bool,
+    internal_output: Optional[io.StringIO] = None,
+) -> int:
     while True:
         line = await loop.run_in_executor(None, os.sys.stdin.readline)
         if not line:
             return 0
+        if internal_output is not None:
+            stale_capture = _capture_preview(internal_output)
+            if stale_capture["captured_lines"]:
+                interface.runtime.enqueue({"type": "background_internal_output_captured", **stale_capture})
         wall_start = time.time()
         try:
             response = await interface.handle_line(line)
         except Exception as exc:  # noqa: BLE001 - public interface returns structured error
             response = InterfaceResponse(run_id=str(new_run_id()), status="error", message=str(exc), data={"error_type": type(exc).__name__})
+        capture_info = {"captured_lines": 0, "preview": []}
+        if internal_output is not None:
+            capture_info = _capture_preview(internal_output)
+            if capture_info["captured_lines"]:
+                interface.runtime.enqueue({"type": "internal_output_captured", "run_id": response.run_id, **capture_info})
         elapsed_s = time.time() - wall_start
 
         if debug_mode:
-            print(json.dumps(response.__dict__, sort_keys=True), flush=True)
+            public_stdout.write(json.dumps(response.__dict__, sort_keys=True) + "\n")
         else:
-            print(_format_clean_result(response, elapsed_s), flush=True)
+            public_stdout.write(_format_clean_result(response, elapsed_s) + "\n")
+        public_stdout.flush()
 
         if response.data.get("quit"):
             return 0
+
+
+async def serve_stdio() -> int:
+    cfg = load_config()
+    start_once_per_login(cfg)
+    mark_block("interface.stdio")
+    debug_mode = cfg.bool("runtime.debug", False)
+    capture_internal = cfg.bool("runtime.capture_internal_output", True)
+
+    interface = AxiomInterface()
+    loop = asyncio.get_running_loop()
+    public_stdout = os.sys.stdout
+    internal_output = io.StringIO()
+    if debug_mode or not capture_internal:
+        return await _serve_stdio_loop(interface, loop, public_stdout, debug_mode=debug_mode)
+    with contextlib.redirect_stdout(internal_output), contextlib.redirect_stderr(internal_output):
+        return await _serve_stdio_loop(
+            interface,
+            loop,
+            public_stdout,
+            debug_mode=debug_mode,
+            internal_output=internal_output,
+        )
 
 
 async def serve_socket() -> int:

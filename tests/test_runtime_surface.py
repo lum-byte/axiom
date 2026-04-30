@@ -13,7 +13,7 @@ os.environ.setdefault("AXIOM_BUS_HMAC_KEY", "1" * 64)
 from tag.cold_start import ColdStart
 from signal_kernel.contracts import FetchAnomalyEvent, FetchMode, RawFetchEvent, SignalExtractedEvent, SurpriseEvent, new_run_id
 from tag.index_daemon import GRADIENT_PRIORITY_HIGH, IndexDaemon, run_once_for_test
-from tag.interface import AxiomInterface, AxiomRuntimeContext, InterfaceSocketServer, JsonLineCodec, QueryOrchestrator, parse_command
+from tag.interface import AxiomInterface, AxiomRuntimeContext, InterfaceSocketServer, JsonLineCodec, QueryOrchestrator, SearchDocument, parse_command
 
 
 class RuntimeSurfaceTests(unittest.TestCase):
@@ -225,6 +225,95 @@ class RuntimeSurfaceTests(unittest.TestCase):
             sum(1 for source in sources if source["domain"] == "wikipedia.org"),
             len(sources),
         )
+
+    def test_ranker_prefers_subject_definition_over_search_listing(self) -> None:
+        runtime = AxiomRuntimeContext(store_dir=Path("/tmp/axiom-definition-rank-test"))
+        orchestrator = QueryOrchestrator(runtime)
+        docs = [
+            SearchDocument(
+                url="https://search.example/?q=what+is+google",
+                domain="search.example",
+                title="Search results for what is google",
+                topology_class="GENERIC_HTML",
+                classification_confidence=0.0,
+                fetch_mode="static",
+                status_code=200,
+                clean_text="Google Docs is a word processor offered by Google.",
+                kernel_signal="Google Docs is a word processor offered by Google.",
+                blocks=["Google Docs is a word processor offered by Google."],
+                fetched_unix=1,
+            ),
+            SearchDocument(
+                url="https://source.example/google",
+                domain="source.example",
+                title="Google",
+                topology_class="GENERIC_HTML",
+                classification_confidence=0.0,
+                fetch_mode="static",
+                status_code=200,
+                clean_text="Google is an American multinational technology company focused on online services.",
+                kernel_signal="Google is an American multinational technology company focused on online services.",
+                blocks=["Google is an American multinational technology company focused on online services."],
+                fetched_unix=2,
+            ),
+        ]
+        ranked = orchestrator._rank_documents("what is google", docs)
+        self.assertEqual(ranked[0]["url"], "https://source.example/google")
+        answer = orchestrator._build_answer("what is google", ranked)
+        self.assertIsNotNone(answer)
+        assert answer is not None
+        self.assertIn("Google is an American", answer["text"])
+
+    def test_interactive_fetch_bypasses_persistent_dedupe(self) -> None:
+        async def run() -> None:
+            with tempfile.TemporaryDirectory() as td:
+                runtime = AxiomRuntimeContext(store_dir=Path(td))
+                dedupe_values: list[bool] = []
+
+                class FakeFetcher:
+                    cl_state = SimpleNamespace(cl1_available=True, cl2_available=False, cl3_available=False, cl4_available=False)
+
+                    async def fetch_single(
+                        self,
+                        url: str,
+                        cl_level: int = 1,
+                        topology_hint: str = "GENERIC_HTML",
+                        *,
+                        dedupe: bool = True,
+                    ) -> RawFetchEvent:
+                        dedupe_values.append(dedupe)
+                        return RawFetchEvent(
+                            url=url,
+                            raw_bytes=b"<html><head><title>Google</title></head><body><p>Google is a search company.</p></body></html>",
+                            status_code=200,
+                            headers={"content-type": "text/html; charset=utf-8"},
+                            fetch_latency=0.01,
+                            fetch_mode=FetchMode.STATIC,
+                            is_robots_txt=False,
+                            is_sitemap=False,
+                            topology_hint=topology_hint,
+                            run_id=str(new_run_id()),
+                            manifest_id=str(new_run_id()),
+                            byte_count=94,
+                        )
+
+                class FakeSanitizer:
+                    def process(self, raw: bytes) -> SimpleNamespace:
+                        return SimpleNamespace(ok=True, text="Google is a search company.", events=[], metrics=SimpleNamespace())
+
+                async def fake_ensure_crawl_stack() -> None:
+                    return None
+
+                runtime.fetcher = FakeFetcher()
+                runtime.sanitizer = FakeSanitizer()
+                runtime.classifier = False
+                runtime.ensure_crawl_stack = fake_ensure_crawl_stack  # type: ignore[assignment]
+
+                document = await QueryOrchestrator(runtime)._fetch_document("https://example.com/google", str(new_run_id()), reason="test")
+                self.assertIsNotNone(document)
+                self.assertEqual(dedupe_values, [False])
+
+        asyncio.run(run())
 
     def test_interface_dev_mode_clearance_escalation(self) -> None:
         async def run() -> None:

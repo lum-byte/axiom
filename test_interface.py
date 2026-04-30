@@ -4,6 +4,8 @@ import time
 from signal_kernel.contracts import new_run_id
 from tag.interface import AxiomInterface, InterfaceRequest
 
+__test__ = False
+
 async def main():
     interface = AxiomInterface()
     orch = interface.orchestrator
@@ -51,9 +53,10 @@ async def main():
 
     # 5. Check the event queue for errors
     print(f"\n[5] EVENT QUEUE (fetch failures/exceptions):")
-    while interface.runtime._event_queue:
-        evt = interface.runtime._event_queue.popleft()
+    while interface.runtime.queued_work:
+        evt = interface.runtime.queued_work.popleft()
         if evt.get("type") in ("fetch_failed", "fetch_exception", "crawl_swarm_complete"):
             print(f"    {evt}")
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

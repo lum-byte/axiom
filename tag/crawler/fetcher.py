@@ -5029,6 +5029,8 @@ class Fetcher:
         crawl_url: CrawlURL,
         manifest_id: str,
         telemetry: ManifestTelemetry,
+        *,
+        dedupe: bool = True,
     ) -> Optional[RawFetchEvent]:
         """
         Execute one URL from the manifest.
@@ -5057,7 +5059,7 @@ class Fetcher:
                 log.warning("fetcher: rate_limiter.acquire failed: %s", exc)
 
         # 2. Bloom filter dedup
-        if self._bloom:
+        if dedupe and self._bloom:
             try:
                 if await self._bloom.contains(crawl_url.url):
                     telemetry.record_skip()
@@ -5242,7 +5244,7 @@ class Fetcher:
         except Exception as exc:
             log.debug("fetcher: html capture skipped after error: %s", exc)
 
-        if self._bloom:
+        if dedupe and self._bloom:
             try:
                 await self._bloom.add(crawl_url.url)
             except Exception as exc:
@@ -5489,6 +5491,8 @@ class Fetcher:
         url: str,
         cl_level: int = 1,
         topology_hint: str = "GENERIC_HTML",
+        *,
+        dedupe: bool = True,
     ) -> Optional[RawFetchEvent]:
         """
         Fetch a single URL at the specified CL level.
@@ -5531,7 +5535,7 @@ class Fetcher:
         )
 
         telemetry = ManifestTelemetry(manifest_id=manifest_id, domain=domain)
-        return await self._execute_url(crawl_url, manifest_id, telemetry)
+        return await self._execute_url(crawl_url, manifest_id, telemetry, dedupe=dedupe)
 
     @property
     def cl_state(self) -> CLState:
