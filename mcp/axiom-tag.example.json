@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "axiom-tag": {
+      "command": "/home/lyrca/Axiom/Releases-x64/compiled/binaries/Linux64/tag-mcp",
+      "args": ["--mode", "stdio"],
+      "env": {
+        "AXIOM_ROOT": "/home/lyrca/Axiom",
+        "AXIOM_CONFIG_TOML": "/home/lyrca/Axiom/config.toml",
+        "AXIOM_MCP_PYTHON": "/home/lyrca/Axiom/.venv/bin/python"
+      }
+    }
+  }
+}

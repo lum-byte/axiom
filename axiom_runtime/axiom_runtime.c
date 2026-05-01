@@ -23,6 +23,8 @@
 
 #define AXIOM_RUNTIME_VERSION "1.0.5"
 #define AXIOM_INTEGRITY_VERSION "1.0.0"
+#define AXIOM_DIC_VERSION "1.0.0"
+#define AXIOM_VERITAS_VERSION "1.0.0"
 #define AXIOM_FNV64_OFFSET 1469598103934665603ull
 #define AXIOM_FNV64_PRIME 1099511628211ull
 #define AXIOM_MAX_FIELD 2048
@@ -105,6 +107,7 @@ static char *handle_learn(axiom_runtime *runtime, const char *run_id, const char
 static char *handle_fetch(axiom_runtime *runtime, const char *run_id, const char *payload);
 static char *handle_search(axiom_runtime *runtime, const char *run_id, const char *payload);
 static unsigned long long fnv1a_update(unsigned long long hash, const unsigned char *data, size_t size);
+static int ascii_word_match(const char *text, const char *word, size_t word_len);
 
 const char *axiom_version(void) {
     return AXIOM_RUNTIME_VERSION;
@@ -112,6 +115,14 @@ const char *axiom_version(void) {
 
 const char *axiom_integrity_version(void) {
     return AXIOM_INTEGRITY_VERSION;
+}
+
+const char *axiom_dic_version(void) {
+    return AXIOM_DIC_VERSION;
+}
+
+const char *axiom_veritas_version(void) {
+    return AXIOM_VERITAS_VERSION;
 }
 
 unsigned long long axiom_integrity_hash_bytes(const void *data, size_t size) {
@@ -144,6 +155,51 @@ int axiom_integrity_hash_file(const char *path, char *out_hex, size_t out_cap) {
     fclose(fp);
     snprintf(out_hex, out_cap, "%016llx", hash);
     return 0;
+}
+
+double axiom_dic_lexical_overlap(const char *query, const char *text) {
+    if (query == NULL || text == NULL) {
+        return 0.0;
+    }
+    char token[128];
+    size_t token_len = 0u;
+    size_t total = 0u;
+    size_t hits = 0u;
+    for (const char *p = query; ; ++p) {
+        int is_word = *p != '\0' && (isalnum((unsigned char)*p) || *p == '_' || *p == '-' || *p == '\'');
+        if (is_word && token_len + 1u < sizeof(token)) {
+            token[token_len++] = (char)tolower((unsigned char)*p);
+            continue;
+        }
+        if (token_len > 1u) {
+            token[token_len] = '\0';
+            total++;
+            if (ascii_word_match(text, token, token_len)) {
+                hits++;
+            }
+        }
+        token_len = 0u;
+        if (*p == '\0') {
+            break;
+        }
+    }
+    if (total == 0u) {
+        return 0.0;
+    }
+    return (double)hits / (double)total;
+}
+
+int axiom_veritas_label_score(double confirm_score, double deny_score, int anchor_newer) {
+    if (confirm_score <= 0.05 && deny_score <= 0.05) {
+        return 1; /* RUMOR */
+    }
+    if (deny_score > confirm_score * 1.25) {
+        return anchor_newer ? 2 : 3; /* LEGACY / CONTESTED */
+    }
+    if (confirm_score > deny_score * 1.15) {
+        return 0; /* CONFIRMED */
+    }
+    return 3; /* CONTESTED */
 }
 
 axiom_runtime *axiom_init(const char *config_json) {
@@ -413,6 +469,32 @@ static unsigned long long fnv1a_update(unsigned long long hash, const unsigned c
         hash *= AXIOM_FNV64_PRIME;
     }
     return hash;
+}
+
+static int ascii_word_match(const char *text, const char *word, size_t word_len) {
+    if (text == NULL || word == NULL || word_len == 0u) {
+        return 0;
+    }
+    char window[128];
+    size_t window_len = 0u;
+    for (const char *p = text; ; ++p) {
+        int is_word = *p != '\0' && (isalnum((unsigned char)*p) || *p == '_' || *p == '-' || *p == '\'');
+        if (is_word && window_len + 1u < sizeof(window)) {
+            window[window_len++] = (char)tolower((unsigned char)*p);
+            continue;
+        }
+        if (window_len == word_len) {
+            window[window_len] = '\0';
+            if (strncmp(window, word, word_len) == 0) {
+                return 1;
+            }
+        }
+        window_len = 0u;
+        if (*p == '\0') {
+            break;
+        }
+    }
+    return 0;
 }
 
 static int enqueue_work(axiom_runtime *runtime, const char *kind, const char *payload, const char *run_id) {

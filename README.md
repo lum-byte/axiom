@@ -16,6 +16,12 @@ search | swarm -10 | depth -2 | find me latest AI news
 
 Workers are clamped by the runtime. Keep the default ceiling at 10 until you intentionally raise it.
 
+Repeat searches return through the completed-answer cache, stored at `store/search_cache.mmap` with metadata in `store/search_cache_index.json`. Use `recheck` when you want TAG to bypass that cache and rerun crawler, DIC, and VERITAS:
+
+```text
+search | swarm -10 | depth -2 | exp -10 | recheck | what is github
+```
+
 ## Dynamic Crawler Config
 
 Crawler source profiles, URL templates, swarm limits, and clearance policies live in:
@@ -60,8 +66,10 @@ Releases-x64/
       Winx64/
         axirt.dll
         axi-dep-resolver.exe
+        tag-mcp.exe
       Linux64/
         axirt.so
+        tag-mcp
 ```
 
 Root `axi.dll` and `axi.so` are the public aliases. Platform runtime files stay inside `compiled/binaries/*` as `axirt.dll` and `axirt.so`, so there is one obvious public library per OS at the release root.
@@ -80,7 +88,43 @@ Windows:
 axicomp.cmd
 ```
 
-`axicomp.cmd` prefers Visual Studio/MSBuild through `Axiom.sln`. If Visual Studio is not available, it falls back to `cl.exe` or `gcc.exe` when one is on PATH.
+`axicomp.cmd` prefers Visual Studio/MSBuild through `Axiom.sln`. If Visual Studio is not available, it falls back to `cl.exe` or `gcc.exe` when one is on PATH. From WSL, build the Windows MCP executable with:
+
+```bash
+make build-go-windows
+```
+
+## External MCP Server
+
+AXIOM TAG also builds as an external MCP stdio process. The Go server owns the JSON-RPC transport and exposes TAG tools plus anchor acquisition tools:
+
+```text
+tag.search
+tag.status
+tag.expand
+tag.veritas
+tag.inject_context
+anchor.wikipedia
+anchor.news
+anchor.scholar
+anchor.wayback
+anchor.web
+```
+
+Linux or WSL:
+
+```bash
+./axicomp.sh linux
+Releases-x64/compiled/binaries/Linux64/tag-mcp --mode stdio
+```
+
+Example MCP client config is in:
+
+```text
+mcp/axiom-tag.example.json
+```
+
+The no-key anchor tier uses Wikipedia, GDELT, Crossref, OpenAlex, and Wayback. Set `BRAVE_SEARCH_API_KEY` to enable `anchor.web`, which adds an independent broad-web index through Brave Search.
 
 ## Dependency Resolver
 
@@ -178,6 +222,21 @@ export AXIOM_HTML_CAPTURE_MAX_BYTES=2097152
 ```
 
 Set `AXIOM_HTML_CAPTURE_LIMIT=0` to disable it.
+
+## Search Cache
+
+The fast path is intentionally above crawler fetch, MCP anchors, DIC, and VERITAS. It caches the final answer envelope, so repeated expanded queries do not recompute context fusion unless `recheck` is present.
+
+Config lives in `config.toml`:
+
+```toml
+[search_cache]
+enabled = true
+persist = true
+ttl_seconds = 86400.0
+path = "store/search_cache.mmap"
+index_path = "store/search_cache_index.json"
+```
 
 ## Terminal Interface
 

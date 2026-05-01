@@ -1,4 +1,4 @@
-.PHONY: all check-prereqs test test-python test-go test-c test-cuda test-rust build build-runtime clean
+.PHONY: all check-prereqs test test-python test-go test-c test-cuda test-rust build build-go build-go-windows build-runtime clean
 
 CC ?= gcc
 PYTHON ?= python
@@ -33,7 +33,7 @@ check-prereqs:
 	@go version >/dev/null || echo "go missing: preparser tests skipped until installed"
 	@cargo --version >/dev/null || echo "cargo missing: Rust TUI tests skipped until installed"
 
-build: build-c build-cuda build-rust build-runtime
+build: build-c build-cuda build-rust build-go build-runtime
 
 build-c:
 	mkdir -p $(LINUX_BIN_DIR)
@@ -50,6 +50,16 @@ build-rust:
 	cd axiom_tui && cargo build --release || true
 	cp axiom_tui/target/release/axiom $(LINUX_BIN_DIR)/axiom || true
 
+build-go:
+	mkdir -p $(RELEASE_ROOT) $(LINUX_BIN_DIR)
+	go build -o $(LINUX_BIN_DIR)/tag-mcp ./cmd/tag-mcp
+	cp $(LINUX_BIN_DIR)/tag-mcp $(RELEASE_ROOT)/tag-mcp
+
+build-go-windows:
+	mkdir -p $(RELEASE_ROOT) $(WIN_BIN_DIR)
+	GOOS=windows GOARCH=amd64 go build -o $(WIN_BIN_DIR)/tag-mcp.exe ./cmd/tag-mcp
+	cp $(WIN_BIN_DIR)/tag-mcp.exe $(RELEASE_ROOT)/tag-mcp.exe
+
 build-runtime:
 	mkdir -p $(RELEASE_ROOT) $(LINUX_BIN_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared axiom_runtime/axiom_runtime.c -o $(LINUX_BIN_DIR)/axirt.so
@@ -64,7 +74,7 @@ test-python:
 	$(PYTHON) -m pytest tests/test_runtime_surface.py -q
 
 test-go:
-	go test ./preparser/...
+	go test ./preparser/... ./cmd/tag-mcp/...
 
 test-c:
 	sh ./run_c_tests.sh

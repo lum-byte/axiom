@@ -31,6 +31,8 @@ PATH_ENV_OVERRIDES: Dict[str, str] = {
     "html_snapshot_dir": "AXIOM_HTML_SNAPSHOT_DIR",
     "fetch_staging_path": "AXIOM_FETCH_STAGING_PATH",
     "tor_work_dir": "AXIOM_TOR_WORK_DIR",
+    "search_cache_path": "AXIOM_SEARCH_CACHE_PATH",
+    "search_cache_index_path": "AXIOM_SEARCH_CACHE_INDEX_PATH",
     "dead_letter_path": "AXIOM_DEAD_LETTER_PATH",
     "bus_event_log_path": "AXIOM_BUS_EVENT_LOG_PATH",
 }
@@ -49,6 +51,8 @@ class RuntimePaths:
     linux_binaries: Path
     dead_letter_path: Path
     bus_event_log_path: Path
+    search_cache_path: Path
+    search_cache_index_path: Path
     html_snapshot_dir: Path
     fetch_staging_path: Path
     tor_work_dir: Path
@@ -67,6 +71,8 @@ class RuntimePaths:
             self.tor_data_dir,
             self.dead_letter_path.parent,
             self.bus_event_log_path.parent,
+            self.search_cache_path.parent,
+            self.search_cache_index_path.parent,
         ):
             path.mkdir(parents=True, exist_ok=True)
 
@@ -80,6 +86,8 @@ class RuntimePaths:
             "AXIOM_RELEASE_ROOT": str(self.release_root),
             "AXIOM_DEAD_LETTER_PATH": str(self.dead_letter_path),
             "AXIOM_BUS_EVENT_LOG_PATH": str(self.bus_event_log_path),
+            "AXIOM_SEARCH_CACHE_PATH": str(self.search_cache_path),
+            "AXIOM_SEARCH_CACHE_INDEX_PATH": str(self.search_cache_index_path),
             "AXIOM_HTML_SNAPSHOT_DIR": str(self.html_snapshot_dir),
             "AXIOM_FETCH_STAGING_PATH": str(self.fetch_staging_path),
             "AXIOM_TOR_WORK_DIR": str(self.tor_work_dir),
@@ -164,6 +172,8 @@ class RuntimePaths:
             "linux_binaries": str(self.linux_binaries),
             "dead_letter_path": str(self.dead_letter_path),
             "bus_event_log_path": str(self.bus_event_log_path),
+            "search_cache_path": str(self.search_cache_path),
+            "search_cache_index_path": str(self.search_cache_index_path),
             "html_snapshot_dir": str(self.html_snapshot_dir),
             "fetch_staging_path": str(self.fetch_staging_path),
             "tor_work_dir": str(self.tor_work_dir),
@@ -208,6 +218,20 @@ class RuntimePathResolver:
             store_dir_override=store_dir_override,
             default_raw="store/bus_events.log",
         )
+        search_cache_path = self._store_scoped_path(
+            "search_cache_path",
+            "search_cache.path",
+            store_dir / "search_cache.mmap",
+            store_dir_override=store_dir_override,
+            default_raw="store/search_cache.mmap",
+        )
+        search_cache_index_path = self._store_scoped_path(
+            "search_cache_index_path",
+            "search_cache.index_path",
+            store_dir / "search_cache_index.json",
+            store_dir_override=store_dir_override,
+            default_raw="store/search_cache_index.json",
+        )
         html_snapshot_dir = self._configured_path("html_snapshot_dir", "paths.html_snapshot_dir", tmp_dir / "html")
         fetch_staging_path = self._configured_path("fetch_staging_path", "paths.fetch_staging_path", tmp_dir / "fetch_staging")
         tor_work_dir = self._configured_path("tor_work_dir", "paths.tor_work_dir", runtime_root / "tor")
@@ -226,6 +250,8 @@ class RuntimePathResolver:
             linux_binaries=linux_binaries,
             dead_letter_path=dead_letter_path,
             bus_event_log_path=bus_event_log_path,
+            search_cache_path=search_cache_path,
+            search_cache_index_path=search_cache_index_path,
             html_snapshot_dir=html_snapshot_dir,
             fetch_staging_path=fetch_staging_path,
             tor_work_dir=tor_work_dir,

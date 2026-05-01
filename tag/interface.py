@@ -25,7 +25,7 @@ import os
 import re
 import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, AsyncIterator, Deque, Dict, List, Optional, Protocol
 from urllib.parse import quote, urljoin, urlparse
@@ -63,8 +63,11 @@ from tag.crawler.swarm_bridge import (
     parse_swarm_search_payload,
     plan_from_generic_talk,
 )
+from tag.dic import DirectContextInjector, DirectlyInjectContextAssembler, ExternalMCPAnchorClient, HybridFusionRanker, QueryExpansionEngine
 from tag.index_daemon import IndexDaemon
 from tag.integrity_sentinel import mark_block, start_once_per_login
+from tag.search_cache import SearchResultCache
+from tag.veritas import VeritasEngine
 
 
 COMMAND_RE = re.compile(r"^\s*(search|fetch|learn|status|quit)\s*\|\s*(.*?)\s*$", re.IGNORECASE)
@@ -287,6 +290,7 @@ class AxiomRuntimeContext:
         self.learned_domains: set[str] = set()
         self.queued_work: List[Dict[str, Any]] = []
         self.document_cache: Dict[str, SearchDocument] = {}
+        self.search_cache = SearchResultCache(store_dir=self.store_dir, config=self.config)
         self.pending_crawl_plans: Dict[str, Dict[str, Any]] = {}
         self.runtime_dependency_errors: Dict[str, str] = {}
         self._dev_tor_process: Optional[subprocess.Popen[Any]] = None
@@ -425,6 +429,7 @@ class AxiomRuntimeContext:
             await self.fetcher.shutdown()
             self.fetcher = None
             self.fetcher_bus_bridge = None
+        self.search_cache.close()
         if self.bus is not None:
             await self.bus.stop()
             self.bus = None
@@ -606,6 +611,8 @@ class AxiomRuntimeContext:
             ("runtime_root", self.paths.runtime_root, "AXIOM_RUNTIME_ROOT"),
             ("tmp_dir", self.paths.tmp_dir, "AXIOM_TMP_DIR"),
             ("release_root", self.paths.release_root, "AXIOM_RELEASE_ROOT"),
+            ("search_cache_path", self.paths.search_cache_path, "AXIOM_SEARCH_CACHE_PATH"),
+            ("search_cache_index_path", self.paths.search_cache_index_path, "AXIOM_SEARCH_CACHE_INDEX_PATH"),
             ("html_snapshot_dir", self.paths.html_snapshot_dir, "AXIOM_HTML_SNAPSHOT_DIR"),
             ("fetch_staging_path", self.paths.fetch_staging_path, "AXIOM_FETCH_STAGING_PATH"),
             ("tor_work_dir", self.paths.tor_work_dir, "AXIOM_TOR_WORK_DIR"),
@@ -841,10 +848,68 @@ class QueryOrchestrator:
             query = query or str(crawl_plan.get("query", "")).strip()
         if not query:
             return InterfaceResponse(run_id=req.run_id, status="error", message="query is empty", data={})
+        force_recheck = bool(crawl_plan and crawl_plan.get("recheck"))
+        cache_key = self.runtime.search_cache.build_key(query=query, crawl_plan=crawl_plan)
+        if not force_recheck:
+            cached = self.runtime.search_cache.get(cache_key)
+            if cached is not None:
+                return self.runtime.search_cache.response_from_entry(cached, run_id=req.run_id)
         swarm_config = crawl_config_from_plan(crawl_plan)
+        expansion = QueryExpansionEngine(config=self.runtime.config).expand(
+            query,
+            requested_limit=int(crawl_plan.get("expansion_count", 0) if crawl_plan else 0),
+        )
+        swarm_config = self._scale_swarm_for_expansion(swarm_config, expansion.effective_limit)
         candidates = self._candidate_sources(query, crawl_plan=crawl_plan)
+        candidates = self._merge_expanded_candidates(query, candidates, expansion)
         self._enqueue_tool_assist_plan(query, candidates, req.run_id)
+        use_mcp_anchors = bool(crawl_plan) or getattr(expansion, "effective_limit", 0) > 0 or self.runtime.config.bool("mcp.anchor_always", False)
+        mcp_anchor_task = (
+            asyncio.create_task(self._collect_mcp_anchor_documents(query, req.run_id, expansion))
+            if use_mcp_anchors
+            else None
+        )
         if not candidates:
+            mcp_anchor_documents = await mcp_anchor_task if mcp_anchor_task is not None else []
+            if mcp_anchor_documents:
+                ranked_blocks = self._rank_documents(query, mcp_anchor_documents)
+                ranked_blocks = HybridFusionRanker(config=self.runtime.config).rank(query, ranked_blocks)
+                veritas = await VeritasEngine(config=self.runtime.config).classify(query, ranked_blocks)
+                dic_context = DirectlyInjectContextAssembler(config=self.runtime.config).assemble(
+                    query=query,
+                    ranked_blocks=ranked_blocks,
+                    expansion=expansion,
+                    veritas=veritas,
+                )
+                injected = DirectContextInjector().format(dic_context)
+                answer = {
+                    "text": dic_context.answer,
+                    "structured": dic_context.structured_answer,
+                    "source": dic_context.citations[0] if dic_context.citations else None,
+                    "sources": list(dic_context.structured_answer.get("citation_spine") or dic_context.citations[:8]),
+                }
+                response = InterfaceResponse(
+                    run_id=req.run_id,
+                    status="ok",
+                    message=dic_context.answer,
+                    data={
+                        "query": query,
+                        "sources": [],
+                        "blocks": ranked_blocks,
+                        "answer": answer,
+                        "direct_inject_context": injected.json_payload,
+                        "injection_text": injected.text,
+                        "veritas": veritas,
+                        "query_expansion": expansion.to_dict(),
+                        "mcp_anchor_documents": len(mcp_anchor_documents),
+                        "single_inference_point": "tag.interface.QueryOrchestrator._synthesize",
+                        "search_engine": False,
+                        "crawl_swarm": self._crawl_swarm_summary(crawl_plan, swarm_config),
+                        "cache": {"hit": False, "key": cache_key},
+                    },
+                )
+                self.runtime.search_cache.put_response(cache_key, response)
+                return response
             self.runtime.enqueue({"type": "learn_from_query", "query": query, "run_id": req.run_id})
             return InterfaceResponse(
                 run_id=req.run_id,
@@ -853,10 +918,27 @@ class QueryOrchestrator:
                 data={"query": query, "sources": []},
             )
         documents = await self._collect_documents(query, req.run_id, candidates, swarm_config=swarm_config)
+        mcp_anchor_documents = await mcp_anchor_task if mcp_anchor_task is not None else []
+        if mcp_anchor_documents:
+            documents = [*mcp_anchor_documents, *documents]
         ranked_blocks = self._rank_documents(query, documents)
-        answer = self._build_answer(query, ranked_blocks)
-        signal = await self._synthesize(query, ranked_blocks, candidates)
-        return InterfaceResponse(
+        ranked_blocks = HybridFusionRanker(config=self.runtime.config).rank(query, ranked_blocks)
+        veritas = await VeritasEngine(config=self.runtime.config).classify(query, ranked_blocks)
+        dic_context = DirectlyInjectContextAssembler(config=self.runtime.config).assemble(
+            query=query,
+            ranked_blocks=ranked_blocks,
+            expansion=expansion,
+            veritas=veritas,
+        )
+        injected = DirectContextInjector().format(dic_context)
+        answer = {
+            "text": dic_context.answer,
+            "structured": dic_context.structured_answer,
+            "source": dic_context.citations[0] if dic_context.citations else None,
+            "sources": list(dic_context.structured_answer.get("citation_spine") or dic_context.citations[:8]),
+        }
+        signal = dic_context.answer
+        response = InterfaceResponse(
             run_id=req.run_id,
             status="ok",
             message=signal,
@@ -865,11 +947,54 @@ class QueryOrchestrator:
                 "sources": candidates,
                 "blocks": ranked_blocks,
                 "answer": answer,
+                "direct_inject_context": injected.json_payload,
+                "injection_text": injected.text,
+                "veritas": veritas,
+                "query_expansion": expansion.to_dict(),
                 "single_inference_point": "tag.interface.QueryOrchestrator._synthesize",
                 "search_engine": False,
                 "crawl_swarm": self._crawl_swarm_summary(crawl_plan, swarm_config),
+                "cache": {"hit": False, "key": cache_key},
             },
         )
+        self.runtime.search_cache.put_response(cache_key, response)
+        return response
+
+    def _scale_swarm_for_expansion(self, config: AxiomCrawlSwarmConfig, expansion_count: int) -> AxiomCrawlSwarmConfig:
+        if expansion_count <= 0:
+            return config
+        total_cap = self.runtime.config.int("dic.max_total_crawlers", 100, low=1, high=5000)
+        hard_cap = self.runtime.config.int("dic.hard_total_crawlers", 500, low=1, high=10000)
+        requested = max(1, config.requested_worker_count or config.worker_count)
+        desired = requested * max(1, expansion_count + 1)
+        worker_count = max(1, min(hard_cap, max(config.worker_count, min(total_cap, desired))))
+        return replace(config, worker_count=worker_count, max_worker_count=max(config.max_worker_count, worker_count))
+
+    def _merge_expanded_candidates(
+        self,
+        query: str,
+        candidates: List[Dict[str, Any]],
+        expansion: Any,
+    ) -> List[Dict[str, Any]]:
+        if getattr(expansion, "effective_limit", 0) <= 0:
+            return candidates
+        merged = list(candidates)
+        seen = {str(candidate.get("url") or "") for candidate in merged}
+        max_sources = self._max_search_sources()
+        for directive in expansion.directives[1:]:
+            for candidate in self._candidate_sources(directive.query, crawl_plan=None):
+                url = str(candidate.get("url") or "")
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                enriched = dict(candidate)
+                enriched["reason"] = f"dic_expansion_{directive.query_type.lower()}_{candidate.get('reason', 'source')}"
+                enriched["expansion_query"] = directive.query
+                enriched["query_type"] = directive.query_type
+                merged.append(enriched)
+                if len(merged) >= max_sources:
+                    return merged
+        return merged
 
     def _candidate_sources(self, query: str, *, crawl_plan: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         terms = {term for term in re.split(r"\W+", query.lower()) if term}
@@ -1097,6 +1222,74 @@ class QueryOrchestrator:
             }
         )
         return summary
+
+    async def _collect_mcp_anchor_documents(self, query: str, run_id: str, expansion: Any) -> List[SearchDocument]:
+        if not self.runtime.config.bool("mcp.enabled", True) or not self.runtime.config.bool("mcp.anchor_process_enabled", True):
+            return []
+        max_anchor_results = self.runtime.config.int("mcp.max_anchor_results", 8, low=1, high=50)
+        anchor_query_count = 1
+        if getattr(expansion, "effective_limit", 0) > 0:
+            anchor_query_count = min(3, max(1, expansion.effective_limit + 1))
+        queries = list(getattr(expansion, "queries", []) or [query])[:anchor_query_count]
+        client = ExternalMCPAnchorClient(config=self.runtime.config)
+
+        async def fetch_anchor_query(anchor_query: str) -> List[Dict[str, Any]]:
+            try:
+                return await client.fetch_anchor_blocks(anchor_query, limit=max_anchor_results)
+            except Exception as exc:  # noqa: BLE001 - MCP anchors are additive, not fatal
+                self.runtime.enqueue(
+                    {
+                        "type": "mcp_anchor_error",
+                        "query": anchor_query,
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "run_id": run_id,
+                    }
+                )
+                return []
+
+        batches = await asyncio.gather(*(fetch_anchor_query(anchor_query) for anchor_query in queries), return_exceptions=False)
+        blocks = []
+        seen_urls: set[str] = set()
+        for batch in batches:
+            for block in batch:
+                url = str(block.get("url") or "")
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                blocks.append(block)
+        documents: List[SearchDocument] = []
+        for block in blocks[: max_anchor_results * len(queries)]:
+            text = str(block.get("text") or "").strip()
+            url = str(block.get("url") or "")
+            if not text or not url:
+                continue
+            document = SearchDocument(
+                url=url,
+                domain=AxiomInterface.normalize_domain(str(block.get("domain") or url)),
+                title=str(block.get("title") or block.get("domain") or url),
+                topology_class=str(block.get("topology_class") or "MCP_ANCHOR"),
+                classification_confidence=float(block.get("classification_confidence") or 1.0),
+                fetch_mode=str(block.get("fetch_mode") or "mcp"),
+                status_code=200,
+                clean_text=text,
+                kernel_signal=text,
+                blocks=self._split_text_blocks(text),
+                fetched_unix=int(time.time()),
+                links=[],
+            )
+            self.runtime.remember_document(document)
+            documents.append(document)
+        if documents:
+            self.runtime.enqueue(
+                {
+                    "type": "mcp_anchor_documents",
+                    "query": query,
+                    "document_count": len(documents),
+                    "queries": queries,
+                    "run_id": run_id,
+                }
+            )
+        return documents
 
     def _enqueue_tool_assist_plan(self, query: str, candidates: List[Dict[str, Any]], run_id: str) -> None:
         if os.environ.get("AXIOM_TOOL_ASSIST", "1").strip().lower() in {"0", "false", "no", "off"}:
@@ -1914,6 +2107,21 @@ def _format_clean_result(response: InterfaceResponse, elapsed_s: float) -> str:
         return json.dumps({
             "status": "error",
             "message": response.message,
+            "time": ts,
+            "time_taken_s": round(elapsed_s, 3),
+            "run_id": response.run_id,
+        }, indent=2, ensure_ascii=False)
+
+    if answer and isinstance(answer.get("structured"), dict):
+        structured = dict(answer.get("structured") or {})
+        sources = answer.get("sources") if isinstance(answer.get("sources"), list) else []
+        if not sources and answer.get("source"):
+            sources = [answer["source"]]
+        return json.dumps({
+            "status": "ok",
+            "query": query,
+            "answer": structured,
+            "sources": sources[:8],
             "time": ts,
             "time_taken_s": round(elapsed_s, 3),
             "run_id": response.run_id,
