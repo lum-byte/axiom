@@ -452,7 +452,7 @@ class RuntimeSurfaceTests(unittest.TestCase):
                         new=mock.AsyncMock(return_value="Deep clearance fetch succeeded."),
                     ),
                 ):
-                    search = await interface.handle_line("search | swarm -2 | depth -1 | deep clearance")
+                    search = await interface.handle_line("search | fanout -2 | depth -1 | deep clearance")
 
                 self.assertEqual(search.status, "ok")
                 self.assertEqual(attempted_levels[:2], [1, 2])

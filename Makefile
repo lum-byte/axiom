@@ -53,12 +53,16 @@ build-rust:
 build-go:
 	mkdir -p $(RELEASE_ROOT) $(LINUX_BIN_DIR)
 	go build -o $(LINUX_BIN_DIR)/tag-mcp ./cmd/tag-mcp
+	go build -o $(LINUX_BIN_DIR)/axiom-crawl-daemon ./cmd/axiom-crawl-daemon
 	cp $(LINUX_BIN_DIR)/tag-mcp $(RELEASE_ROOT)/tag-mcp
+	cp $(LINUX_BIN_DIR)/axiom-crawl-daemon $(RELEASE_ROOT)/axiom-crawl-daemon
 
 build-go-windows:
 	mkdir -p $(RELEASE_ROOT) $(WIN_BIN_DIR)
 	GOOS=windows GOARCH=amd64 go build -o $(WIN_BIN_DIR)/tag-mcp.exe ./cmd/tag-mcp
+	GOOS=windows GOARCH=amd64 go build -o $(WIN_BIN_DIR)/axiom-crawl-daemon.exe ./cmd/axiom-crawl-daemon
 	cp $(WIN_BIN_DIR)/tag-mcp.exe $(RELEASE_ROOT)/tag-mcp.exe
+	cp $(WIN_BIN_DIR)/axiom-crawl-daemon.exe $(RELEASE_ROOT)/axiom-crawl-daemon.exe
 
 build-runtime:
 	mkdir -p $(RELEASE_ROOT) $(LINUX_BIN_DIR)
@@ -74,7 +78,7 @@ test-python:
 	$(PYTHON) -m pytest tests/test_runtime_surface.py -q
 
 test-go:
-	go test ./preparser/... ./cmd/tag-mcp/...
+	go test ./preparser/... ./cmd/tag-mcp/... ./cmd/axiom-crawl-daemon/...
 
 test-c:
 	sh ./run_c_tests.sh

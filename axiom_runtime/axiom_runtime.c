@@ -409,10 +409,16 @@ static char *handle_search(axiom_runtime *runtime, const char *run_id, const cha
             sizeof(data),
             "{\"query\":\"%s\",\"raw_payload\":\"%s\",\"sources\":[],\"blocks\":[],\"queued_learning\":true,"
             "\"search_engine\":false,\"reason\":\"no learned topology candidates\","
+            "\"crawl_fanout\":{\"requested_worker_count\":%d,\"worker_count\":%d,"
+            "\"depth\":%d,\"max_waves\":%d,\"one_worker_per_site\":true},"
             "\"crawl_swarm\":{\"requested_worker_count\":%d,\"worker_count\":%d,"
             "\"depth\":%d,\"max_waves\":%d,\"one_worker_per_site\":true}}",
             esc_query,
             esc_payload,
+            requested_workers,
+            requested_workers > 0 ? requested_workers : 0,
+            depth,
+            depth > 0 ? depth : 0,
             requested_workers,
             requested_workers > 0 ? requested_workers : 0,
             depth,
@@ -445,6 +451,8 @@ static char *handle_search(axiom_runtime *runtime, const char *run_id, const cha
         "\"topology_classes\":[\"LEARNED_DOMAIN\"],"
         "\"confidence\":%.3f,\"single_inference_point\":\"runtime_synthesizer\","
         "\"search_engine\":false,\"routing\":\"wlm_source_priority_and_frontier\","
+        "\"crawl_fanout\":{\"requested_worker_count\":%d,\"worker_count\":%d,"
+        "\"depth\":%d,\"max_waves\":%d,\"one_worker_per_site\":true},"
         "\"crawl_swarm\":{\"requested_worker_count\":%d,\"worker_count\":%d,"
         "\"depth\":%d,\"max_waves\":%d,\"one_worker_per_site\":true}}",
         esc_query,
@@ -452,6 +460,10 @@ static char *handle_search(axiom_runtime *runtime, const char *run_id, const cha
         esc_signal,
         sources,
         count > 0u ? 0.72 + ((double)(count > 3u ? 3u : count) * 0.06) : 0.0,
+        requested_workers,
+        requested_workers > 0 ? requested_workers : 0,
+        depth,
+        depth > 0 ? depth : 0,
         requested_workers,
         requested_workers > 0 ? requested_workers : 0,
         depth,
@@ -857,31 +869,48 @@ static void parse_swarm_payload(const char *payload, char *query, size_t query_c
         return;
     }
 
-    char head[64];
-    snprintf(head, sizeof(head), "%s", segments[start]);
-    lower_ascii(head);
-    if (strncmp(head, "swarm", 5) != 0) {
-        snprintf(query, query_cap, "%s", payload);
-        trim_ascii(query);
-        return;
-    }
-    if (workers != NULL) {
-        *workers = parse_option_int(head, "swarm", 0);
-        if (*workers < 0) *workers = 0;
-        if (*workers > 100) *workers = 100;
-    }
-
     query[0] = '\0';
-    for (size_t i = start + 1u; i < count; ++i) {
+    int saw_directive = 0;
+    for (size_t i = start; i < count; ++i) {
         char lower[64];
         snprintf(lower, sizeof(lower), "%s", segments[i]);
         lower_ascii(lower);
+        const char *worker_prefix = NULL;
+        if (strncmp(lower, "fanout", 6) == 0) {
+            worker_prefix = "fanout";
+        } else if (strncmp(lower, "parallel", 8) == 0) {
+            worker_prefix = "parallel";
+        } else if (strncmp(lower, "workers", 7) == 0) {
+            worker_prefix = "workers";
+        } else if (strncmp(lower, "worker", 6) == 0) {
+            worker_prefix = "worker";
+        } else if (strncmp(lower, "crawlers", 8) == 0) {
+            worker_prefix = "crawlers";
+        } else if (strncmp(lower, "crawler", 7) == 0) {
+            worker_prefix = "crawler";
+        } else if (strncmp(lower, "swarm", 5) == 0) {
+            worker_prefix = "swarm";
+        }
+        if (worker_prefix != NULL) {
+            saw_directive = 1;
+            if (workers != NULL) {
+                *workers = parse_option_int(lower, worker_prefix, 0);
+                if (*workers < 0) *workers = 0;
+                if (*workers > 100) *workers = 100;
+            }
+            continue;
+        }
         if (strncmp(lower, "depth", 5) == 0) {
+            saw_directive = 1;
             if (depth != NULL) {
                 *depth = parse_option_int(lower, "depth", 0);
                 if (*depth < 0) *depth = 0;
                 if (*depth > 8) *depth = 8;
             }
+            continue;
+        }
+        if (strncmp(lower, "exp", 3) == 0 || strcmp(lower, "recheck") == 0 || strcmp(lower, "refresh") == 0 || strcmp(lower, "nocache") == 0 || strcmp(lower, "no-cache") == 0) {
+            saw_directive = 1;
             continue;
         }
         if (query[0] != '\0') {
@@ -890,7 +919,7 @@ static void parse_swarm_payload(const char *payload, char *query, size_t query_c
         append_json_text(query, query_cap, segments[i]);
     }
     trim_ascii(query);
-    if (query[0] == '\0') {
+    if (!saw_directive || query[0] == '\0') {
         snprintf(query, query_cap, "%s", payload);
         trim_ascii(query);
     }

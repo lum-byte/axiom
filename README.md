@@ -2,16 +2,16 @@
 
 AXIOM is a Topology-Addressed Generation runtime. The goal is to replace the usual RAG shape of "embed documents, store vectors, retrieve by similarity" with a system that treats the web as typed topology: classify the source shape, crawl the right parts, strip noise, keep signal, and expose one inference boundary.
 
-The current repo is v1.0.5 of that runtime surface. It includes the Python TAG layer, crawler pieces, signal/kernel tests, native C ABI (`axi.dll` / `axi.so`), Rust terminal runtime checks, TypeScript swarm bridge, and a standalone Python inference file that calls the native library directly.
+The current repo is v1.0.5 of that runtime surface. It includes the Python TAG layer, crawler pieces, signal/kernel tests, native C ABI (`axi.dll` / `axi.so`), Rust terminal runtime checks, TypeScript coordinator bridge, and a standalone Python inference file that calls the native library directly.
 
 ## Where The Idea Came From
 
-The design comes from the internal AXIOM notes in `internal_docs/`: model weights as the index, web pages as typed structure, signal extraction before LLM synthesis, and a single `axiom>` command surface. The imported `swarm/` tree added a useful generic task language, so AXIOM now treats swarm text as webwide crawl intent rather than a terminal-specific protocol.
+The design comes from the internal AXIOM notes in `internal_docs/`: model weights as the index, web pages as typed structure, signal extraction before LLM synthesis, and a single `axiom>` command surface. The imported TypeScript coordinator tree added a useful generic task language, so AXIOM now treats that text as webwide crawl intent rather than a terminal-specific protocol.
 
 The practical command shape is:
 
 ```text
-search | swarm -10 | depth -2 | find me latest AI news
+search | fanout -10 | depth -2 | find me latest AI news
 ```
 
 Workers are clamped by the runtime. Keep the default ceiling at 10 until you intentionally raise it.
@@ -19,12 +19,37 @@ Workers are clamped by the runtime. Keep the default ceiling at 10 until you int
 Repeat searches return through the completed-answer cache, stored at `store/search_cache.mmap` with metadata in `store/search_cache_index.json`. Use `recheck` when you want TAG to bypass that cache and rerun crawler, DIC, and VERITAS:
 
 ```text
-search | swarm -10 | depth -2 | exp -10 | recheck | what is github
+search | fanout -10 | depth -2 | exp -10 | recheck | what is github
 ```
+
+## Resident Crawl Daemon
+
+AXIOM also ships a Go resident crawler daemon. It boots a fixed worker pool once, keeps HTTP connections warm, sleeps on a JSONL control channel, and wakes when a query sends candidate URLs. The daemon keeps an in-memory link graph and applies a PageRank-style score so URLs repeatedly referenced by useful pages rise in later crawl plans.
+
+Build it:
+
+```bash
+make build-go
+```
+
+Run it directly:
+
+```bash
+Releases-x64/compiled/binaries/Linux64/axiom-crawl-daemon -workers 10
+```
+
+Then send JSONL:
+
+```json
+{"id":"s1","op":"status"}
+{"id":"q1","op":"query","query":"what is github","limit":2,"candidates":[{"url":"https://en.wikipedia.org/wiki/GitHub"},{"url":"https://github.com/about"}]}
+```
+
+The response includes `results`, `telemetry`, and `pagerank` stats. This is a resident fanout layer; cached completed answers are still served faster through `store/search_cache.mmap`.
 
 ## Dynamic Crawler Config
 
-Crawler source profiles, URL templates, swarm limits, and clearance policies live in:
+Crawler source profiles, URL templates, fanout limits, and clearance policies live in:
 
 ```text
 config/crawler_sources.json
@@ -250,7 +275,7 @@ cargo run
 Then type:
 
 ```text
-axiom> search | swarm -10 | depth -2 | find me latest AI news
+axiom> search | fanout -10 | depth -2 | find me latest AI news
 axiom> fetch | https://example.com
 axiom> learn | reuters.com
 axiom> status |

@@ -98,10 +98,13 @@ class RuntimePaths:
             else:
                 os.environ.setdefault(key, value)
         native_candidates = os.pathsep.join(str(path) for path in self.native_library_candidates())
+        crawl_daemon_candidates = os.pathsep.join(str(path) for path in self.crawl_daemon_candidates())
         if override:
             os.environ["AXIOM_NATIVE_LIBRARY_CANDIDATES"] = native_candidates
+            os.environ["AXIOM_CRAWL_DAEMON_CANDIDATES"] = crawl_daemon_candidates
         else:
             os.environ.setdefault("AXIOM_NATIVE_LIBRARY_CANDIDATES", native_candidates)
+            os.environ.setdefault("AXIOM_CRAWL_DAEMON_CANDIDATES", crawl_daemon_candidates)
 
     def native_library_candidates(self, *, system: Optional[str] = None) -> List[Path]:
         system_name = (system or platform.system()).lower()
@@ -142,6 +145,29 @@ class RuntimePaths:
             system_tor = shutil.which("tor")
             if system_tor:
                 candidates.append(Path(system_tor))
+        return _dedupe_paths(candidates)
+
+    def crawl_daemon_candidates(self, *, system: Optional[str] = None) -> List[Path]:
+        env_path = os.environ.get("AXIOM_CRAWL_DAEMON_EXE", "").strip()
+        candidates: List[Path] = [Path(env_path)] if env_path else []
+        system_name = (system or platform.system()).lower()
+        if system_name.startswith("win"):
+            candidates.extend(
+                [
+                    self.win_binaries / "axiom-crawl-daemon.exe",
+                    self.release_root / "axiom-crawl-daemon.exe",
+                ]
+            )
+        else:
+            candidates.extend(
+                [
+                    self.linux_binaries / "axiom-crawl-daemon",
+                    self.release_root / "axiom-crawl-daemon",
+                ]
+            )
+        found = shutil.which("axiom-crawl-daemon")
+        if found:
+            candidates.append(Path(found))
         return _dedupe_paths(candidates)
 
     def tor_data_candidates(self, tor_exe: Optional[Path] = None) -> List[Path]:

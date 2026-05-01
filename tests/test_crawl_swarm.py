@@ -129,7 +129,7 @@ class CrawlSwarmTests(unittest.TestCase):
         asyncio.run(run())
 
     def test_swarm_command_builds_plan_and_runtime_clamps_workers(self) -> None:
-        query, plan = parse_swarm_search_payload("swarm -100 | depth -2 | who were the last couple presidents of usa")
+        query, plan = parse_swarm_search_payload("fanout -100 | depth -2 | who were the last couple presidents of usa")
         self.assertEqual(query, "who were the last couple presidents of usa")
         self.assertIsNotNone(plan)
         assert plan is not None
@@ -146,7 +146,7 @@ class CrawlSwarmTests(unittest.TestCase):
         self.assertEqual(config.max_waves, 2)
 
     def test_swarm_worker_ceiling_is_configurable(self) -> None:
-        plan = plan_from_generic_talk("search | swarm -100 | cuda mamba ssm", requested_workers=100)
+        plan = plan_from_generic_talk("search | fanout -100 | cuda mamba ssm", requested_workers=100)
         with mock.patch.dict("os.environ", {"AXIOM_CRAWL_MAX_WORKERS": "32"}, clear=True):
             config = crawl_config_from_plan(plan)
         self.assertEqual(config.requested_worker_count, 100)
@@ -154,7 +154,7 @@ class CrawlSwarmTests(unittest.TestCase):
         self.assertEqual(config.worker_count, 32)
 
     def test_swarm_plan_expands_latest_ai_news_beyond_wikipedia(self) -> None:
-        query, plan = parse_swarm_search_payload("swarm -10 | depth -2 | find me latest AI news")
+        query, plan = parse_swarm_search_payload("fanout -10 | depth -2 | find me latest AI news")
         self.assertEqual(query, "find me latest AI news")
         self.assertIsNotNone(plan)
         assert plan is not None
@@ -180,7 +180,7 @@ class CrawlSwarmTests(unittest.TestCase):
             )
             sources = orchestrator._candidate_sources("last couple presidents of usa", crawl_plan=plan)
         self.assertEqual(sources[0]["domain"], "whitehouse.gov")
-        self.assertTrue(sources[0]["reason"].startswith("swarm_bridge"))
+        self.assertTrue(sources[0]["reason"].startswith("fanout_bridge"))
         self.assertIn("archives.gov", {source["domain"] for source in sources[:20]})
 
     def test_ranked_blocks_keep_domain_diversity_when_available(self) -> None:

@@ -178,7 +178,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--status", action="store_const", dest="command", const="status", help="Run status instead of search.")
     parser.add_argument("--learn", action="store_const", dest="command", const="learn", help="Learn the query as a domain.")
     parser.add_argument("--fetch", action="store_const", dest="command", const="fetch", help="Fetch the query as a URL.")
-    parser.add_argument("--workers", "-w", type=int, default=10, help="Requested swarm workers, clamped to 1..100.")
+    parser.add_argument("--workers", "-w", type=int, default=10, help="Requested crawl fanout workers, clamped to 1..100.")
     parser.add_argument("--depth", "-d", type=int, default=1, help="Traversal depth / waves, clamped to 1..8.")
     parser.add_argument("--seed", action="append", default=[], help="Domain to learn before search. Can be repeated.")
     parser.add_argument("--no-auto-seed", action="store_true", help="Do not auto-learn broad source domains before search.")
@@ -278,7 +278,7 @@ def build_request(command: str, query: str, *, workers: int, depth: int) -> Dict
         return {"command": "learn", "payload": query, "run_id": str(uuid.uuid4())}
     if command == "fetch":
         return {"command": "fetch", "payload": query, "run_id": str(uuid.uuid4())}
-    payload = f"swarm -{workers} | depth -{depth} | {query}"
+    payload = f"fanout -{workers} | depth -{depth} | {query}"
     return {"command": "search", "payload": payload, "run_id": str(uuid.uuid4())}
 
 

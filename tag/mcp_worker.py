@@ -89,12 +89,12 @@ async def run_search(payload: Dict[str, Any]) -> Dict[str, Any]:
     query = str(payload.get("query") or payload.get("q") or "").strip()
     if not query:
         raise MCPWorkerError("tag.search requires query")
-    swarm = bounded_int(payload.get("swarm", payload.get("workers", 10)), 1, 500)
+    fanout = bounded_int(payload.get("fanout", payload.get("parallelism", payload.get("swarm", payload.get("workers", 10)))), 1, 500)
     depth = bounded_int(payload.get("depth", 3), 1, 32)
     exp = bounded_int(payload.get("exp", payload.get("expansion", 0)), 0, 100)
     command = str(payload.get("command") or "").strip()
     if not command:
-        parts = [f"search | swarm -{swarm}", f"depth -{depth}"]
+        parts = [f"search | fanout -{fanout}", f"depth -{depth}"]
         if exp > 0:
             parts.append(f"exp -{exp}")
         parts.append(query)
@@ -114,6 +114,7 @@ async def run_search(payload: Dict[str, Any]) -> Dict[str, Any]:
         "citations": (data.get("direct_inject_context") or {}).get("citations", []),
         "query_expansion": data.get("query_expansion", {}),
         "veritas": data.get("veritas", {}),
+        "crawl_fanout": data.get("crawl_fanout", data.get("crawl_swarm", {})),
         "crawl_swarm": data.get("crawl_swarm", {}),
         "time_taken_s": round(elapsed_s, 3),
         "run_id": response.get("run_id"),

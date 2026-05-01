@@ -211,13 +211,29 @@ def build_structured_answer(
     summary_record = choose_summary_record(query, visible_records)
     fallback_summary = f"TAG found source-backed context for '{query}', but the extracted text was too thin for a confident compact summary."
     summary = clip_sentence(str(summary_record.get("text") if summary_record else fallback_summary), 360)
+    summary_source = source_ref(summary_record) if summary_record else None
     capability_cards = extract_capability_cards(visible_records)
     if capability_cards:
-        key_points = [card["detail"] for card in capability_cards[:6]]
+        key_points = [
+            evidence_point_from_text(
+                f"{card['name']}: {((card.get('evidence') or {}).get('text') if isinstance(card.get('evidence'), dict) else card.get('detail'))}",
+                card.get("source"),
+                label=str(card.get("name") or "Evidence"),
+            )
+            for card in capability_cards[:6]
+        ]
     else:
-        key_points = [clip_sentence(record["text"], 260) for record in select_unique_records(visible_records, limit=6, exclude={sentence_key(summary)})]
-    what_points = [summary] if capability_cards else points_for(visible_records, DEFINITION_CUES, limit=3, fallback=[summary])
-    capability_points = [f"{card['name']}: {card['detail']}" for card in capability_cards[:6]] or points_for(
+        key_points = [
+            evidence_point(record, limit=260)
+            for record in select_unique_records(visible_records, limit=6, exclude={sentence_key(summary)})
+        ]
+    what_points = [
+        evidence_point_from_text(summary, summary_source, label="Summary")
+    ] if capability_cards else points_for(visible_records, DEFINITION_CUES, limit=3, fallback=[summary])
+    capability_points = [
+        evidence_point_from_text(f"{card['name']}: {card['detail']}", card.get("source"), label=str(card.get("name") or "Capability"))
+        for card in capability_cards[:6]
+    ] or points_for(
         visible_records,
         CAPABILITY_CUES,
         limit=5,
@@ -239,7 +255,15 @@ def build_structured_answer(
         {"title": "Common Uses", "points": use_points},
     ]
     if distinctions:
-        sections.append({"title": "Important Distinctions", "points": [item["text"] for item in distinctions]})
+        sections.append(
+            {
+                "title": "Important Distinctions",
+                "points": [
+                    evidence_point_from_text(str(item.get("text") or ""), item.get("source"), label=str(item.get("label") or "Distinction"))
+                    for item in distinctions
+                ],
+            }
+        )
     verification = {
         "method": "TAG-DIC fused retrieval with VERITAS legitimacy metadata",
         "anchor_blocks": len(anchor_blocks),
@@ -250,6 +274,7 @@ def build_structured_answer(
     }
     return {
         "summary": summary,
+        "summary_source": summary_source,
         "key_points": key_points,
         "capabilities": capability_cards,
         "sections": sections,
@@ -360,71 +385,145 @@ def points_for(
     cues: Tuple[str, ...],
     *,
     limit: int,
-    fallback: List[str],
-) -> List[str]:
+    fallback: List[Any],
+) -> List[Dict[str, Any]]:
     matches = [record for record in records if any(cue in str(record.get("text") or "").lower() for cue in cues)]
-    points = [clip_sentence(record["text"], 260) for record in select_unique_records(matches, limit=limit)]
+    points = [evidence_point(record, limit=260) for record in select_unique_records(matches, limit=limit)]
     if points:
         return points
-    return [clip_sentence(point, 260) for point in fallback[:limit] if str(point).strip()]
+    fallback_points: List[Dict[str, Any]] = []
+    for point in fallback[:limit]:
+        if isinstance(point, dict) and point.get("text"):
+            fallback_points.append(dict(point))
+        elif str(point).strip():
+            fallback_points.append(evidence_point_from_text(str(point), None, label="Fallback"))
+    return fallback_points
 
 
-def infer_distinctions(query: str, records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+def infer_distinctions(query: str, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     haystack = " ".join([query, *[str(record.get("text") or "") for record in records[:12]]]).lower()
-    distinctions: List[Dict[str, str]] = []
-    if "github" in haystack and re.search(r"\bgit\b", haystack):
+    distinctions: List[Dict[str, Any]] = []
+    git_record = next(
+        (
+            record
+            for record in records
+            if "github" in str(record.get("text") or "").lower()
+            and re.search(r"\bgit\b", str(record.get("text") or ""), flags=re.IGNORECASE)
+        ),
+        None,
+    )
+    if "github" in haystack and re.search(r"\bgit\b", haystack) and git_record is not None:
         distinctions.append(
             {
                 "label": "Git vs GitHub",
-                "text": "Git is the version-control system; GitHub is the hosted collaboration platform built around Git repositories and project workflows.",
+                "text": "The source evidence frames Git as the version-control layer and GitHub as the hosted developer platform built around Git-backed project workflows.",
+                "source": source_ref(git_record),
+                "evidence": clip_sentence(str(git_record.get("text") or ""), 260),
             }
         )
     return distinctions
 
 
-def extract_capability_cards(records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    haystack = " ".join(str(record.get("text") or "") for record in records[:16]).lower()
-    cards: List[Dict[str, str]] = []
-    add_card(cards, haystack, ("create, store, manage, and share code", "store, manage, and share"), "Code Hosting", "Stores project code and gives teams a shared place to manage it.")
-    add_card(cards, haystack, ("distributed version control", "uses git", "version control"), "Version Control", "Uses Git-based version control so project history, changes, and revisions stay trackable.")
-    add_card(cards, haystack, ("repository", "repositories"), "Repositories", "Organizes project files, code, documentation, and change history into repositories.")
-    add_card(cards, haystack, ("access control", "pull request", "pull requests", "collaboration"), "Collaboration", "Supports controlled collaboration through access management and review-oriented project workflows.")
-    add_card(cards, haystack, ("bug tracking", "feature requests", "task management", "issues"), "Project Management", "Tracks bugs, feature requests, and project tasks alongside the codebase.")
-    add_card(cards, haystack, ("continuous integration", "automation"), "Automation", "Connects code changes to automated workflows such as continuous integration.")
-    add_card(cards, haystack, ("wikis", "documentation"), "Documentation", "Keeps project knowledge close to the code through wikis and documentation surfaces.")
+def extract_capability_cards(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    cards: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for record in records[:16]:
+        sentence = str(record.get("text") or "")
+        for phrase in capability_phrases(sentence):
+            name = capability_name_from_phrase(phrase)
+            key = sentence_key(name)
+            if not name or key in seen:
+                continue
+            seen.add(key)
+            source = source_ref(record)
+            cards.append(
+                {
+                    "name": name,
+                    "detail": clip_sentence(phrase, 160),
+                    "evidence": {
+                        "text": clip_sentence(sentence, 280),
+                        "source": source,
+                    },
+                    "source": source,
+                    "name_source": source,
+                }
+            )
+            if len(cards) >= 8:
+                return cards
     return cards
 
 
-def add_card(
-    cards: List[Dict[str, str]],
-    haystack: str,
-    needles: Tuple[str, ...],
-    name: str,
-    detail: str,
-) -> None:
-    if any(needle in haystack for needle in needles) and all(card["name"] != name for card in cards):
-        cards.append({"name": name, "detail": detail})
+def capability_phrases(sentence: str) -> List[str]:
+    clean = re.sub(r"\s+", " ", sentence).strip()
+    phrases: List[str] = []
+    feature_match = re.search(
+        r"(?:provides?|offers?|includes?|features?|supports?)\s+(?P<tail>[^.]{12,260})",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    if feature_match:
+        phrases.extend(split_capability_tail(feature_match.group("tail")))
+    allows_match = re.search(
+        r"(?:allows?|lets|enables?)\s+[^.]{0,80}?\s+to\s+(?P<tail>[^.]{12,220})",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    if allows_match:
+        tail = allows_match.group("tail")
+        if len(TOKEN_RE.findall(tail)) <= 5:
+            phrases.append(tail)
+    for direct in re.finditer(
+        r"\b(?:distributed version control|version control|access control|bug tracking|feature requests?|task management|continuous integration|repositories?|wikis?|documentation|pull requests?)\b",
+        clean,
+        flags=re.IGNORECASE,
+    ):
+        phrases.append(direct.group(0))
+    return [phrase for phrase in (normalize_capability_phrase(item) for item in phrases) if phrase]
 
 
-def mechanism_points_from_cards(cards: List[Dict[str, str]]) -> List[str]:
-    priority = {"Version Control", "Repositories", "Collaboration", "Automation"}
-    return [card["detail"] for card in cards if card["name"] in priority][:4]
+def split_capability_tail(tail: str) -> List[str]:
+    tail = re.split(r"\b(?:through|using|via|by)\b", tail, maxsplit=1, flags=re.IGNORECASE)[0]
+    tail = re.sub(r"\s+for\s+every\s+project\b.*$", "", tail, flags=re.IGNORECASE)
+    parts = re.split(r",\s+|\s+and\s+|\s+or\s+", tail)
+    return [part for part in parts if part.strip()]
 
 
-def use_points_from_cards(cards: List[Dict[str, str]]) -> List[str]:
-    names = {card["name"] for card in cards}
-    points: List[str] = []
-    if "Code Hosting" in names or "Repositories" in names:
-        points.append("Host open-source or private software projects in shared repositories.")
-    if "Collaboration" in names:
-        points.append("Coordinate code review and team contributions around the same project.")
-    if "Project Management" in names:
-        points.append("Track bugs, feature requests, and implementation work next to the code.")
-    if "Documentation" in names:
-        points.append("Publish project notes, docs, or wiki pages close to the repository.")
-    if "Automation" in names:
-        points.append("Run automation and integration workflows when code changes.")
-    return points[:5]
+def normalize_capability_phrase(phrase: str) -> str:
+    clean = re.sub(r"\([^)]*\)", " ", phrase)
+    clean = re.sub(
+        r"\b(?:itself|it|github|the|a|an|their|its|provides?|offers?|includes?|supports?)\b",
+        " ",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    clean = re.sub(r"\s+", " ", clean).strip(" ,.;:-")
+    clean = re.sub(r"^(?:and|or)\s+", "", clean, flags=re.IGNORECASE)
+    if len(clean) < 4 or len(clean.split()) > 8:
+        return ""
+    return clean
+
+
+def capability_name_from_phrase(phrase: str) -> str:
+    words = [word for word in TOKEN_RE.findall(phrase) if word.lower() not in {"and", "or", "to", "for", "with"}]
+    if not words:
+        return ""
+    return " ".join(word.capitalize() if word.islower() else word for word in words[:6])
+
+
+def mechanism_points_from_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        evidence_point_from_text(f"{card.get('name')}: {card.get('detail')}", card.get("source"), label=str(card.get("name") or "Mechanism"))
+        for card in cards
+        if any(term in str(card.get("name") or "").lower() for term in ("git", "version", "repository", "integration", "workflow"))
+    ][:4]
+
+
+def use_points_from_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        evidence_point_from_text(f"{card.get('name')}: {card.get('detail')}", card.get("source"), label=str(card.get("name") or "Use"))
+        for card in cards
+        if any(term in str(card.get("detail") or "").lower() for term in ("developers", "project", "code", "collaboration", "manage", "share"))
+    ][:5]
 
 
 def visible_citation_spine(records: List[Dict[str, Any]], citations: List[Dict[str, Any]], *, limit: int) -> List[Dict[str, Any]]:
@@ -443,6 +542,47 @@ def visible_citation_spine(records: List[Dict[str, Any]], citations: List[Dict[s
         if item not in ordered:
             ordered.append(item)
     return ordered[:limit]
+
+
+def evidence_point(record: Dict[str, Any], *, limit: int = 260, label: str = "") -> Dict[str, Any]:
+    return evidence_point_from_text(str(record.get("text") or ""), source_ref(record), label=label, limit=limit)
+
+
+def evidence_point_from_text(source_text: str, source: Optional[Dict[str, Any]], *, label: str = "", limit: int = 260) -> Dict[str, Any]:
+    point = {
+        "text": clip_sentence(source_text, limit),
+        "source": source,
+    }
+    if label:
+        point["label"] = label
+    return point
+
+
+def point_text(point: Any) -> str:
+    if isinstance(point, dict):
+        return str(point.get("text") or "")
+    return str(point or "")
+
+
+def source_ref(record: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not record:
+        return None
+    block = record.get("block") if isinstance(record.get("block"), dict) else {}
+    url = str(block.get("url") or "")
+    title = str(block.get("title") or block.get("domain") or url)
+    domain = str(block.get("domain") or block.get("source") or "")
+    if not url and not title:
+        return None
+    anchor_text = title or domain or url
+    ref = {
+        "title": title,
+        "anchor_text": anchor_text,
+        "url": url,
+        "domain": domain,
+    }
+    if url:
+        ref["markdown"] = f"[{anchor_text}]({url})"
+    return ref
 
 
 def is_low_signal_sentence(sentence: str) -> bool:
@@ -570,13 +710,13 @@ class DirectlyInjectContextAssembler:
             paragraphs.append(str(structured["summary"]))
         key_points = structured.get("key_points") if isinstance(structured.get("key_points"), list) else []
         if key_points:
-            paragraphs.append("Key points: " + " ".join(str(point) for point in key_points[:6]))
+            paragraphs.append("Key points: " + " ".join(point_text(point) for point in key_points[:6]))
         for section in structured.get("sections", []):
             if not isinstance(section, dict):
                 continue
             points = section.get("points") if isinstance(section.get("points"), list) else []
             if points:
-                paragraphs.append(f"{section.get('title', 'Context')}: " + " ".join(str(point) for point in points[:5]))
+                paragraphs.append(f"{section.get('title', 'Context')}: " + " ".join(point_text(point) for point in points[:5]))
 
         body_sentences = []
         for sentence in sentences:
@@ -698,6 +838,8 @@ def build_citations(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "score": block.get("score"),
             }
         )
+        citations[-1]["anchor_text"] = citations[-1]["title"] or citations[-1]["domain"] or url
+        citations[-1]["markdown"] = f"[{citations[-1]['anchor_text']}]({url})"
     return citations
 
 

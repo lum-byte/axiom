@@ -70,10 +70,10 @@ def test_expanded_search_second_hit_uses_completed_answer_cache() -> None:
                 mock.patch.object(QueryOrchestrator, "_collect_mcp_anchor_documents", new=fake_mcp),
             ):
                 first_start = time.perf_counter()
-                first = await interface.handle_line("search | swarm -3 | depth -1 | exp -2 | what is github")
+                first = await interface.handle_line("search | fanout -3 | depth -1 | exp -2 | what is github")
                 first_elapsed = time.perf_counter() - first_start
                 second_start = time.perf_counter()
-                second = await interface.handle_line("search | swarm -3 | depth -1 | exp -2 | what is github")
+                second = await interface.handle_line("search | fanout -3 | depth -1 | exp -2 | what is github")
                 second_elapsed = time.perf_counter() - second_start
 
             assert first.status == "ok"
@@ -137,8 +137,8 @@ def test_recheck_bypasses_completed_answer_cache() -> None:
                 mock.patch.object(QueryOrchestrator, "_run_kernel", new=mock.AsyncMock(return_value="GitHub is a developer platform for code.")),
                 mock.patch.object(QueryOrchestrator, "_collect_mcp_anchor_documents", new=fake_mcp),
             ):
-                first = await interface.handle_line("search | swarm -3 | depth -1 | exp -2 | what is github")
-                second = await interface.handle_line("search | swarm -3 | depth -1 | exp -2 | recheck | what is github")
+                first = await interface.handle_line("search | fanout -3 | depth -1 | exp -2 | what is github")
+                second = await interface.handle_line("search | fanout -3 | depth -1 | exp -2 | recheck | what is github")
 
             assert first.data["cache"]["hit"] is False
             assert second.data["cache"]["hit"] is False

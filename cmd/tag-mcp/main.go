@@ -821,11 +821,12 @@ func BuildTools() []ToolDefinition {
 		},
 	}
 	return []ToolDefinition{
-		Tool("tag.search", "TAG Search", "Run the full AXIOM TAG search pipeline with swarm, expansion, DIC, and VERITAS.", map[string]any{
-			"query": map[string]any{"type": "string"},
-			"swarm": map[string]any{"type": "integer", "minimum": 1, "maximum": 500},
-			"depth": map[string]any{"type": "integer", "minimum": 1, "maximum": 32},
-			"exp":   map[string]any{"type": "integer", "minimum": 0, "maximum": 100},
+		Tool("tag.search", "TAG Search", "Run the full AXIOM TAG search pipeline with crawl fanout, expansion, DIC, and VERITAS.", map[string]any{
+			"query":  map[string]any{"type": "string"},
+			"fanout": map[string]any{"type": "integer", "minimum": 1, "maximum": 500},
+			"swarm":  map[string]any{"type": "integer", "minimum": 1, "maximum": 500},
+			"depth":  map[string]any{"type": "integer", "minimum": 1, "maximum": 32},
+			"exp":    map[string]any{"type": "integer", "minimum": 0, "maximum": 100},
 		}, []string{"query"}, map[string]any{"readOnlyHint": true, "openWorldHint": true}),
 		Tool("tag.status", "TAG Status", "Return TAG runtime status and dependency checks.", map[string]any{}, nil, map[string]any{"readOnlyHint": true}),
 		Tool("tag.expand", "TAG Query Expansion", "Expand a query through the TAG-DIC GBNF DSL and 100+ query-type taxonomy.", map[string]any{

@@ -61,10 +61,11 @@ def test_axiom_infer_calls_native_runtime_and_prints_full_json(tmp_path: Path) -
     assert payload["axiom_infer_version"] == "1.0.5"
     assert payload["native_version"] == "1.0.5"
     assert payload["ok"] is True
-    assert payload["request"]["payload"] == "swarm -10 | depth -2 | find me latest AI news"
+    assert payload["request"]["payload"] == "fanout -10 | depth -2 | find me latest AI news"
     assert payload["last_response"]["json"]["data"]["query"] == "find me latest AI news"
     assert payload["last_response"]["json"]["data"]["crawl_swarm"]["requested_worker_count"] == 10
     assert payload["last_response"]["json"]["data"]["crawl_swarm"]["depth"] == 2
+    assert payload["last_response"]["json"]["data"]["crawl_fanout"]["requested_worker_count"] == 10
     source_domains = {source["domain"] for source in payload["last_response"]["json"]["data"]["sources"]}
     assert {"openai.com", "arxiv.org", "reuters.com"} <= source_domains
     assert payload["last_response"]["raw"].startswith("{")

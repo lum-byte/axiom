@@ -58,6 +58,19 @@ source_config = "config/crawler_sources.json"
 max_workers = 10
 worker_ceiling = 10
 
+[crawl_daemon]
+enabled = true
+command = "auto"
+workers = 10
+timeout_ms = 15000
+max_body_bytes = 2097152
+pagerank_damping = 0.85
+pagerank_iterations = 8
+protocol = "jsonl"
+resident_workers = true
+page_rank_ordering = true
+user_agent = "AxiomCrawlDaemon/1.0.5 (+https://local.axiom.invalid)"
+
 [dic]
 enabled = true
 default_expansion_limit = 0
@@ -154,6 +167,7 @@ files = [
   "tag/crawler/source_config.py",
   "tag/crawler/swarm.py",
   "tag/crawler/swarm_bridge.py",
+  "cmd/axiom-crawl-daemon/main.go",
   "tag/dic/__init__.py",
   "tag/dic/assembler.py",
   "tag/dic/gbnf_dsl.py",

@@ -1,7 +1,7 @@
 """
-AXIOM swarm bridge.
+AXIOM crawl fanout bridge.
 
-The imported TypeScript swarm talks in generic tasks, prompts, messages, and
+The imported TypeScript coordinator talks in generic tasks, prompts, messages, and
 queues.  This module turns that generic shape into the concrete crawl plan that
 TAG can execute: query text, seed domains, source URLs, worker request, and
 compute controls.
@@ -27,12 +27,13 @@ from tag.crawler.swarm import AxiomCrawlSwarmConfig, ABSOLUTE_SWARM_WORKER_LIMIT
 from tag.dic.gbnf_dsl import parse_expansion_directive
 
 
-AXIOM_SWARM_WATERMARK = "axiom.swarm.webwide.v1"
-SWARM_HEAD_RE = re.compile(r"^\s*swarm(?:\s+-(?P<workers>\d{1,4}))?\s*$", re.IGNORECASE)
+AXIOM_FANOUT_WATERMARK = "axiom.fanout.webwide.v1"
+AXIOM_SWARM_WATERMARK = AXIOM_FANOUT_WATERMARK
+WORKER_HEAD_RE = re.compile(r"^\s*(?:fanout|parallel|workers?|crawlers?|swarm)(?:\s+-(?P<workers>\d{1,4}))?\s*$", re.IGNORECASE)
 DEPTH_SEGMENT_RE = re.compile(r"^\s*depth\s+-?(?P<depth>\d{1,2})\s*$", re.IGNORECASE)
 EXP_SEGMENT_RE = re.compile(r"^\s*(?:exp|expand|expansion)\s+-?(?P<expansion>\d{1,3})\s*$", re.IGNORECASE)
 RECHECK_SEGMENT_RE = re.compile(r"^\s*(?:recheck|refresh|nocache|no-cache)\s*$", re.IGNORECASE)
-WORKER_TEXT_RE = re.compile(r"\bswarm\s*-(?P<workers>\d{1,4})\b", re.IGNORECASE)
+WORKER_TEXT_RE = re.compile(r"\b(?:fanout|parallel|workers?|crawlers?|swarm)\s*-(?P<workers>\d{1,4})\b", re.IGNORECASE)
 DEPTH_TEXT_RE = re.compile(r"\bdepth\s*-?(?P<depth>\d{1,2})\b", re.IGNORECASE)
 RECHECK_TEXT_RE = re.compile(r"\b(?:recheck|refresh|nocache|no-cache)\b", re.IGNORECASE)
 DOMAIN_RE = re.compile(
@@ -56,13 +57,13 @@ def parse_swarm_search_payload(payload: str) -> tuple[str, Optional[Dict[str, An
     recheck = bool(parsed.get("recheck", False))
     plan = plan_from_generic_talk(
         {
-            "kind": "axiom_cli_swarm",
+            "kind": "axiom_cli_fanout",
             "content": query,
             "requested_workers": requested_workers,
             "depth": depth,
             "expansion_count": expansion_count,
             "recheck": recheck,
-            "hints": {"command_syntax": "search | swarm -N | depth -D | query"},
+            "hints": {"command_syntax": "search | fanout -N | depth -D | query"},
         },
         default_query=query,
         requested_workers=requested_workers,
@@ -88,7 +89,7 @@ def plan_from_generic_talk(
     expansion = expansion_count or _extract_requested_expansion(payload) or inline_expansion or 0
     force_recheck = recheck or _extract_recheck(payload)
     seed_domains = unique_domains([*extract_domains(text), *pick_seed_domains(text)])
-    source_urls = source_urls_for_domains(text, seed_domains, reason="swarm_bridge_seed")
+    source_urls = source_urls_for_domains(text, seed_domains, reason="fanout_bridge_seed")
     return {
         "watermark": AXIOM_SWARM_WATERMARK,
         "intent": infer_intent(text),
@@ -137,7 +138,7 @@ def normalize_crawl_plan(payload: Any, *, default_query: str = "") -> Dict[str, 
         ]
     )
     source_urls = _normalize_source_urls(payload.get("source_urls"))
-    source_urls.extend(source_urls_for_domains(query, seed_domains, reason="swarm_bridge_seed"))
+    source_urls.extend(source_urls_for_domains(query, seed_domains, reason="fanout_bridge_seed"))
     source_urls = _unique_source_urls(source_urls)
     constraints = dict(payload.get("constraints") or {})
     constraints.setdefault("one_worker_per_site", True)
@@ -234,27 +235,35 @@ def _parse_swarm_command(text: str) -> Optional[Dict[str, Any]]:
         segments = segments[1:]
     if not segments:
         return None
-    swarm_match = SWARM_HEAD_RE.match(segments[0])
-    if not swarm_match:
-        return None
-    requested_workers = _coerce_int(swarm_match.group("workers"))
+    requested_workers: Optional[int] = None
     depth: Optional[int] = None
     expansion_count: Optional[int] = None
     recheck = False
+    saw_directive = False
     query_segments: List[str] = []
-    for segment in segments[1:]:
+    for segment in segments:
+        worker_match = WORKER_HEAD_RE.match(segment)
+        if worker_match:
+            requested_workers = _coerce_int(worker_match.group("workers"))
+            saw_directive = True
+            continue
         depth_match = DEPTH_SEGMENT_RE.match(segment)
         if depth_match:
             depth = _bounded_int_value(depth_match.group("depth"), 3, 1, _max_waves())
+            saw_directive = True
             continue
         expansion_match = EXP_SEGMENT_RE.match(segment)
         if expansion_match:
             expansion_count = _bounded_int_value(expansion_match.group("expansion"), 0, 0, int(_LIMITS.get("max_expansion_limit", 100) or 100))
+            saw_directive = True
             continue
         if RECHECK_SEGMENT_RE.match(segment):
             recheck = True
+            saw_directive = True
             continue
         query_segments.append(segment)
+    if not saw_directive:
+        return None
     return {
         "query": " | ".join(query_segments).strip(),
         "workers": requested_workers,
@@ -363,7 +372,7 @@ def _origin_context(payload: Any) -> Dict[str, Any]:
     task = payload.get("task") if isinstance(payload.get("task"), Mapping) else {}
     identity = payload.get("identity") if isinstance(payload.get("identity"), Mapping) else {}
     return {
-        "kind": str(payload.get("kind") or payload.get("type") or "generic_swarm_talk"),
+        "kind": str(payload.get("kind") or payload.get("type") or "generic_fanout_talk"),
         "task_type": str(task.get("type") or payload.get("task_type") or ""),
         "agent_name": str(identity.get("agentName") or payload.get("agent_name") or ""),
         "team_name": str(identity.get("teamName") or payload.get("team_name") or ""),
@@ -410,7 +419,7 @@ def _normalize_source_urls(value: Any) -> List[Dict[str, Any]]:
             {
                 "url": url,
                 "domain": domain,
-                "reason": str(item.get("reason") or "swarm_bridge_source"),
+                "reason": str(item.get("reason") or "fanout_bridge_source"),
                 "seeded": bool(item.get("seeded", True)),
                 "cached": bool(item.get("cached", False)),
             }

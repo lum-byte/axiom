@@ -27,7 +27,7 @@ def test_query_dsl_has_at_least_100_question_types_and_grammar() -> None:
 
 
 def test_swarm_bridge_parses_expansion_directive() -> None:
-    query, plan = parse_swarm_search_payload("swarm -10 | depth -2 | exp -10 | recheck | what is google")
+    query, plan = parse_swarm_search_payload("fanout -10 | depth -2 | exp -10 | recheck | what is google")
     assert query == "what is google"
     assert plan is not None
     assert plan["requested_worker_count"] == 10
@@ -36,6 +36,11 @@ def test_swarm_bridge_parses_expansion_directive() -> None:
     assert plan["recheck"] is True
     config = crawl_config_from_plan(plan)
     assert config.worker_count == 10
+    query2, plan2 = parse_swarm_search_payload("depth -2 | exp -10 | what is github")
+    assert query2 == "what is github"
+    assert plan2 is not None
+    assert plan2["requested_worker_count"] == 10
+    assert plan2["depth"] == 2
 
 
 def test_query_expansion_generates_typed_directives() -> None:
@@ -91,6 +96,8 @@ def test_dic_assembler_outputs_500_word_context_when_context_is_available() -> N
     assert context.structured_answer["summary"].startswith("GitHub")
     assert context.structured_answer["sections"]
     assert context.structured_answer["citation_spine"]
+    assert context.structured_answer["key_points"][0]["source"]["url"].startswith("https://")
+    assert context.structured_answer["citation_spine"][0]["markdown"].startswith("[")
     assert context.query_trace["expansion_count"] == 5
 
 
