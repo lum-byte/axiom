@@ -6,7 +6,19 @@ The current repo is v1.0.5 of that runtime surface. It includes the Python TAG l
 
 ## Where The Idea Came From
 
-The design comes from the internal AXIOM notes in `internal_docs/`: model weights as the index, web pages as typed structure, signal extraction before LLM synthesis, and a single `axiom>` command surface. The imported TypeScript coordinator tree added a useful generic task language, so AXIOM now treats that text as webwide crawl intent rather than a terminal-specific protocol.
+It started because I was bored and annoyed.
+
+Every search tool I used felt like it was lying to me, not with wrong answers, but with noise dressed up as answers. Paragraphs of hedged, bloated text that made me read four sentences to find one fact. I kept thinking: someone already wrote the clean version of this. It's on a page somewhere. The problem isn't the information, it's everything around it.
+So I started pulling at that thread.
+
+The first thing I built was the signal kernel, a grep pipeline inside an Alpine container that strips raw HTML down to just the parts that matter before any language model sees it. Stripe's API docs: 1.1MB in, 8.4KB out, in 7 milliseconds. That worked. That felt like something.
+Then I realized the stripping was only useful if you knew what the page was before you fetched it. So I built a classifier, five signal paths that look at a URL, its headers, and the first 4KB of content and decide what topology class the page belongs to before a single full fetch happens. News article. SaaS docs. REST API. Forum thread. Eighteen classes total. The traversal policy, the extraction recipe, the fetch strategy, all of it falls out of that classification automatically.
+
+Then I needed a crawl layer that wouldn't fall over. Bloom filter for deduplication, 44,000 URLs per second, zero false positives at five million URLs. SQLite-backed frontier that survives crashes and resumes from the exact position it died at.
+Then a world model. Then a topology parser that compiles extraction recipes. Then an RL loop that treats gradient steps as index updates. Then VERITAS for source confidence. Then DIC for answer fusion. Then a persistent mmap store so a warm query costs 0.001 seconds and a cold one costs 0.002.
+None of it was planned. Each piece existed because the previous piece needed it.
+
+The result is a search engine with no vector database, no embedding store, no retrieval step. The weights are the index. Reading is retrieval. It answers in a millisecond and cites its sources.
 
 The practical command shape is:
 
