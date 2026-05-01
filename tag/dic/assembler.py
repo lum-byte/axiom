@@ -125,6 +125,71 @@ LOW_SIGNAL_CUES = (
     "cookies",
     "privacy policy",
 )
+CAPABILITY_BLUEPRINTS = (
+    {
+        "name": "Code Hosting",
+        "detail": "Stores project code and gives teams a shared place to manage it.",
+        "patterns": (
+            r"\bcreate,\s*store,\s*manage,\s*and\s*share\b",
+            r"\bstor(?:e|es|ing).{0,80}\bcode\b",
+            r"\bcode hosting\b",
+            r"\brepositor(?:y|ies)\b",
+            r"\bshare.{0,80}\bcode\b",
+        ),
+    },
+    {
+        "name": "Version Control",
+        "detail": "Uses Git-based version control so project history, changes, and revisions stay trackable.",
+        "patterns": (
+            r"\bgit\b",
+            r"\bversion control\b",
+            r"\bdistributed version control\b",
+            r"\brevision",
+        ),
+    },
+    {
+        "name": "Collaboration",
+        "detail": "Supports controlled collaboration through access management and review-oriented project workflows.",
+        "patterns": (
+            r"\bcollaborat",
+            r"\baccess control\b",
+            r"\bpull request",
+            r"\bcode review\b",
+            r"\breview changes\b",
+        ),
+    },
+    {
+        "name": "Project Management",
+        "detail": "Tracks bugs, feature requests, and project tasks alongside the codebase.",
+        "patterns": (
+            r"\bbug tracking\b",
+            r"\bissue tracking\b",
+            r"\bfeature request",
+            r"\btask management\b",
+            r"\bproject management\b",
+        ),
+    },
+    {
+        "name": "Automation",
+        "detail": "Connects code changes to automated workflows such as continuous integration.",
+        "patterns": (
+            r"\bcontinuous integration\b",
+            r"\bautomation\b",
+            r"\bworkflows?\b",
+            r"\bci\b",
+        ),
+    },
+    {
+        "name": "Documentation",
+        "detail": "Keeps project knowledge close to the code through wikis and documentation surfaces.",
+        "patterns": (
+            r"\bwikis?\b",
+            r"\bdocumentation\b",
+            r"\bdocs\b",
+            r"\bproject notes\b",
+        ),
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -208,30 +273,27 @@ def build_structured_answer(
 ) -> Dict[str, Any]:
     primary_records = primary_records_for_query(query, records)
     visible_records = primary_records if len(primary_records) >= 3 else records
+    citation_spine = assign_citation_ids(visible_citation_spine(visible_records, citations, limit=5))
+    citation_lookup = citation_lookup_by_url(citation_spine)
     summary_record = choose_summary_record(query, visible_records)
     fallback_summary = f"TAG found source-backed context for '{query}', but the extracted text was too thin for a confident compact summary."
     summary = clip_sentence(str(summary_record.get("text") if summary_record else fallback_summary), 360)
-    summary_source = source_ref(summary_record) if summary_record else None
-    capability_cards = extract_capability_cards(visible_records)
+    summary_source_id, summary_source = source_pointer(summary_record, citation_lookup)
+    capability_cards = extract_capability_cards(visible_records, citation_lookup)
     if capability_cards:
-        key_points = [
-            evidence_point_from_text(
-                f"{card['name']}: {((card.get('evidence') or {}).get('text') if isinstance(card.get('evidence'), dict) else card.get('detail'))}",
-                card.get("source"),
-                label=str(card.get("name") or "Evidence"),
-            )
-            for card in capability_cards[:6]
-        ]
+        key_points = [str(card.get("detail") or "") for card in capability_cards[:6] if str(card.get("detail") or "").strip()]
     else:
-        key_points = [
-            evidence_point(record, limit=260)
-            for record in select_unique_records(visible_records, limit=6, exclude={sentence_key(summary)})
-        ]
-    what_points = [
-        evidence_point_from_text(summary, summary_source, label="Summary")
-    ] if capability_cards else points_for(visible_records, DEFINITION_CUES, limit=3, fallback=[summary])
+        key_points = [summary]
+        key_points.extend(record_point(record, limit=260) for record in select_unique_records(visible_records, limit=5, exclude={sentence_key(summary)}))
+    if capability_cards:
+        what_points = [summary]
+    else:
+        definition_points = points_for(visible_records, DEFINITION_CUES, limit=3, fallback=[summary])
+        what_points = [summary]
+        what_points.extend(point for point in definition_points if sentence_key(point) != sentence_key(summary))
+        what_points = what_points[:3]
     capability_points = [
-        evidence_point_from_text(f"{card['name']}: {card['detail']}", card.get("source"), label=str(card.get("name") or "Capability"))
+        f"{card['name']}: {card['detail']}"
         for card in capability_cards[:6]
     ] or points_for(
         visible_records,
@@ -246,23 +308,33 @@ def build_structured_answer(
         fallback=key_points[3:6] or key_points[:2],
     )
     use_points = use_points_from_cards(capability_cards) or points_for(visible_records, USE_CUES, limit=5, fallback=capability_points[:3])
-    distinctions = infer_distinctions(query, visible_records)
-    citation_spine = visible_citation_spine(visible_records, citations, limit=5)
-    sections = [
-        {"title": "What It Is", "points": what_points},
-        {"title": "Core Capabilities", "points": capability_points},
-        {"title": "How It Works", "points": mechanism_points},
-        {"title": "Common Uses", "points": use_points},
-    ]
+    distinctions = infer_distinctions(query, visible_records, citation_lookup)
+    if capability_cards:
+        sections = [
+            section("What It Is", what_points, [summary_source_id]),
+            section("Core Capabilities", capability_points, source_ids_from_cards(capability_cards)),
+            section("How It Works", mechanism_points, source_ids_from_cards(capability_cards, names=("Version Control", "Automation", "Collaboration"))),
+            section("Common Uses", use_points, source_ids_from_cards(capability_cards)),
+        ]
+    else:
+        sections = [
+            section("What It Is", what_points, [summary_source_id]),
+            section("Key Facts", key_points[:6], [summary_source_id]),
+            section("Background", points_for(visible_records, BACKGROUND_CUES, limit=4, fallback=key_points[3:6] or key_points[:2]), [summary_source_id]),
+            section(
+                "Why It Matters",
+                points_for(
+                    visible_records,
+                    ("largest", "provider", "worldwide", "users", "market", "valuable", "popular", "important"),
+                    limit=4,
+                    fallback=key_points[:3],
+                ),
+                [summary_source_id],
+            ),
+        ]
     if distinctions:
         sections.append(
-            {
-                "title": "Important Distinctions",
-                "points": [
-                    evidence_point_from_text(str(item.get("text") or ""), item.get("source"), label=str(item.get("label") or "Distinction"))
-                    for item in distinctions
-                ],
-            }
+            section("Important Distinctions", [str(item.get("text") or "") for item in distinctions], [str(item.get("source_id") or "") for item in distinctions])
         )
     verification = {
         "method": "TAG-DIC fused retrieval with VERITAS legitimacy metadata",
@@ -274,6 +346,7 @@ def build_structured_answer(
     }
     return {
         "summary": summary,
+        "summary_source_id": summary_source_id,
         "summary_source": summary_source,
         "key_points": key_points,
         "capabilities": capability_cards,
@@ -351,6 +424,13 @@ def score_sentence(
 
 def choose_summary_record(query: str, records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     terms = query_terms(query)
+    subject = query_subject(query)
+    if subject:
+        subject_re = re.compile(rf"^{re.escape(subject)}\b\s+(?:is|are|was|were|refers to|means|provides|offers)\b", re.IGNORECASE)
+        for record in records:
+            text = str(record.get("text") or "")
+            if subject_re.search(text):
+                return record
     for record in records:
         text = str(record.get("text") or "")
         lower = text.lower()
@@ -358,6 +438,19 @@ def choose_summary_record(query: str, records: List[Dict[str, Any]]) -> Optional
         if any(cue in lower for cue in DEFINITION_CUES) and (not terms or tokens & terms):
             return record
     return records[0] if records else None
+
+
+def query_subject(query: str) -> str:
+    clean = re.sub(r"\s+", " ", query).strip(" ?!.")
+    clean = re.sub(
+        r"^(?:what|who|where|when|why|how)\s+(?:is|are|was|were|do|does|did|to|can|could|would|should)?\s*",
+        "",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    clean = re.sub(r"^(?:the|a|an)\s+", "", clean, flags=re.IGNORECASE)
+    words = clean.split()
+    return " ".join(words[:6]).lower()
 
 
 def select_unique_records(records: List[Dict[str, Any]], *, limit: int, exclude: Optional[set[str]] = None) -> List[Dict[str, Any]]:
@@ -386,21 +479,21 @@ def points_for(
     *,
     limit: int,
     fallback: List[Any],
-) -> List[Dict[str, Any]]:
+) -> List[str]:
     matches = [record for record in records if any(cue in str(record.get("text") or "").lower() for cue in cues)]
-    points = [evidence_point(record, limit=260) for record in select_unique_records(matches, limit=limit)]
+    points = [record_point(record, limit=260) for record in select_unique_records(matches, limit=limit)]
     if points:
         return points
-    fallback_points: List[Dict[str, Any]] = []
+    fallback_points: List[str] = []
     for point in fallback[:limit]:
         if isinstance(point, dict) and point.get("text"):
-            fallback_points.append(dict(point))
+            fallback_points.append(str(point.get("text") or ""))
         elif str(point).strip():
-            fallback_points.append(evidence_point_from_text(str(point), None, label="Fallback"))
+            fallback_points.append(str(point))
     return fallback_points
 
 
-def infer_distinctions(query: str, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def infer_distinctions(query: str, records: List[Dict[str, Any]], citation_lookup: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
     haystack = " ".join([query, *[str(record.get("text") or "") for record in records[:12]]]).lower()
     distinctions: List[Dict[str, Any]] = []
     git_record = next(
@@ -413,44 +506,91 @@ def infer_distinctions(query: str, records: List[Dict[str, Any]]) -> List[Dict[s
         None,
     )
     if "github" in haystack and re.search(r"\bgit\b", haystack) and git_record is not None:
+        source_id, source_markdown = source_pointer(git_record, citation_lookup)
         distinctions.append(
             {
                 "label": "Git vs GitHub",
-                "text": "The source evidence frames Git as the version-control layer and GitHub as the hosted developer platform built around Git-backed project workflows.",
-                "source": source_ref(git_record),
-                "evidence": clip_sentence(str(git_record.get("text") or ""), 260),
+                "text": "Git is the version-control system; GitHub is the hosted collaboration platform built around Git repositories and project workflows.",
+                "source_id": source_id,
+                "source": source_markdown,
             }
         )
     return distinctions
 
 
-def extract_capability_cards(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def extract_capability_cards(records: List[Dict[str, Any]], citation_lookup: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
     cards: List[Dict[str, Any]] = []
     seen: set[str] = set()
+    for blueprint in CAPABILITY_BLUEPRINTS:
+        record = first_record_matching_patterns(records, tuple(str(pattern) for pattern in blueprint["patterns"]))
+        if record is None:
+            continue
+        card = capability_card(
+            str(blueprint["name"]),
+            str(blueprint["detail"]),
+            record,
+            citation_lookup,
+        )
+        key = sentence_key(card["name"])
+        if key not in seen:
+            seen.add(key)
+            cards.append(card)
     for record in records[:16]:
         sentence = str(record.get("text") or "")
         for phrase in capability_phrases(sentence):
             name = capability_name_from_phrase(phrase)
+            name, detail = normalize_capability_card_text(name, phrase, sentence)
             key = sentence_key(name)
             if not name or key in seen:
                 continue
             seen.add(key)
-            source = source_ref(record)
-            cards.append(
-                {
-                    "name": name,
-                    "detail": clip_sentence(phrase, 160),
-                    "evidence": {
-                        "text": clip_sentence(sentence, 280),
-                        "source": source,
-                    },
-                    "source": source,
-                    "name_source": source,
-                }
-            )
+            cards.append(capability_card(name, detail, record, citation_lookup))
             if len(cards) >= 8:
                 return cards
     return cards
+
+
+def first_record_matching_patterns(records: List[Dict[str, Any]], patterns: Tuple[str, ...]) -> Optional[Dict[str, Any]]:
+    for record in records[:24]:
+        lower = str(record.get("text") or "").lower()
+        if any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in patterns):
+            return record
+    return None
+
+
+def capability_card(
+    name: str,
+    detail: str,
+    record: Dict[str, Any],
+    citation_lookup: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    source_id, source_markdown = source_pointer(record, citation_lookup)
+    card = {
+        "name": name,
+        "detail": detail,
+    }
+    if source_id:
+        card["source_id"] = source_id
+    if source_markdown:
+        card["source"] = source_markdown
+    return card
+
+
+def normalize_capability_card_text(name: str, phrase: str, sentence: str) -> Tuple[str, str]:
+    lower = " ".join([name, phrase, sentence]).lower()
+    if "version control" in lower or re.search(r"\bgit\b", lower):
+        return "Version Control", "Uses Git-based version control so project history, changes, and revisions stay trackable."
+    if "access control" in lower or "pull request" in lower or "collaborat" in lower:
+        return "Collaboration", "Supports controlled collaboration through access management and review-oriented project workflows."
+    if "bug tracking" in lower or "feature request" in lower or "task management" in lower or "issue tracking" in lower:
+        return "Project Management", "Tracks bugs, feature requests, and project tasks alongside the codebase."
+    if "continuous integration" in lower or "workflow" in lower or "automation" in lower:
+        return "Automation", "Connects code changes to automated workflows such as continuous integration."
+    if "wiki" in lower or "documentation" in lower or "docs" in lower:
+        return "Documentation", "Keeps project knowledge close to the code through wikis and documentation surfaces."
+    if "repository" in lower or "store" in lower or "share" in lower or "code" in lower:
+        return "Code Hosting", "Stores project code and gives teams a shared place to manage it."
+    return name, clip_sentence(sentence, 180)
 
 
 def capability_phrases(sentence: str) -> List[str]:
@@ -510,20 +650,50 @@ def capability_name_from_phrase(phrase: str) -> str:
     return " ".join(word.capitalize() if word.islower() else word for word in words[:6])
 
 
-def mechanism_points_from_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def mechanism_points_from_cards(cards: List[Dict[str, Any]]) -> List[str]:
     return [
-        evidence_point_from_text(f"{card.get('name')}: {card.get('detail')}", card.get("source"), label=str(card.get("name") or "Mechanism"))
+        str(card.get("detail") or "")
         for card in cards
-        if any(term in str(card.get("name") or "").lower() for term in ("git", "version", "repository", "integration", "workflow"))
+        if any(term in str(card.get("name") or "").lower() for term in ("git", "version", "repository", "integration", "workflow", "automation", "collaboration"))
     ][:4]
 
 
-def use_points_from_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return [
-        evidence_point_from_text(f"{card.get('name')}: {card.get('detail')}", card.get("source"), label=str(card.get("name") or "Use"))
-        for card in cards
-        if any(term in str(card.get("detail") or "").lower() for term in ("developers", "project", "code", "collaboration", "manage", "share"))
-    ][:5]
+def use_points_from_cards(cards: List[Dict[str, Any]]) -> List[str]:
+    names = {str(card.get("name") or "") for card in cards}
+    uses: List[str] = []
+    if "Code Hosting" in names:
+        uses.append("Host open-source or private software projects in shared repositories.")
+    if "Collaboration" in names:
+        uses.append("Coordinate code review and team contributions around the same project.")
+    if "Project Management" in names:
+        uses.append("Track bugs, feature requests, and implementation work next to the code.")
+    if "Documentation" in names:
+        uses.append("Publish project notes, docs, or wiki pages close to the repository.")
+    if "Automation" in names:
+        uses.append("Run automation and integration workflows when code changes.")
+    return uses[:5]
+
+
+def source_ids_from_cards(cards: List[Dict[str, Any]], names: Tuple[str, ...] = ()) -> List[str]:
+    allowed = set(names)
+    source_ids: List[str] = []
+    for card in cards:
+        if allowed and str(card.get("name") or "") not in allowed:
+            continue
+        source_id = str(card.get("source_id") or "")
+        if source_id and source_id not in source_ids:
+            source_ids.append(source_id)
+    return source_ids
+
+
+def section(title: str, points: List[Any], source_ids: List[Any]) -> Dict[str, Any]:
+    clean_points = [point_text(point) for point in points if point_text(point).strip()]
+    item: Dict[str, Any] = {"title": title, "points": clean_points}
+    clean_source_ids = [str(source_id) for source_id in source_ids if str(source_id or "").strip()]
+    deduped_source_ids = list(dict.fromkeys(clean_source_ids))
+    if deduped_source_ids:
+        item["source_ids"] = deduped_source_ids
+    return item
 
 
 def visible_citation_spine(records: List[Dict[str, Any]], citations: List[Dict[str, Any]], *, limit: int) -> List[Dict[str, Any]]:
@@ -542,6 +712,38 @@ def visible_citation_spine(records: List[Dict[str, Any]], citations: List[Dict[s
         if item not in ordered:
             ordered.append(item)
     return ordered[:limit]
+
+
+def assign_citation_ids(citations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    assigned: List[Dict[str, Any]] = []
+    for index, citation in enumerate(citations, start=1):
+        item = dict(citation)
+        item["id"] = str(item.get("id") or f"S{index}")
+        item["anchor_text"] = str(item.get("anchor_text") or item.get("title") or item.get("domain") or item.get("url") or item["id"])
+        if item.get("url"):
+            item["markdown"] = str(item.get("markdown") or f"[{item['anchor_text']}]({item['url']})")
+        assigned.append(item)
+    return assigned
+
+
+def citation_lookup_by_url(citations: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    return {str(citation.get("url") or ""): citation for citation in citations if citation.get("url")}
+
+
+def source_pointer(record: Optional[Dict[str, Any]], citation_lookup: Dict[str, Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
+    if not record:
+        return None, None
+    block = record.get("block") if isinstance(record.get("block"), dict) else {}
+    citation = citation_lookup.get(str(block.get("url") or ""))
+    if not citation:
+        return None, None
+    source_id = str(citation.get("id") or "")
+    source_markdown = str(citation.get("markdown") or citation.get("url") or "")
+    return source_id or None, source_markdown or None
+
+
+def record_point(record: Dict[str, Any], *, limit: int = 260) -> str:
+    return clip_sentence(str(record.get("text") or ""), limit)
 
 
 def evidence_point(record: Dict[str, Any], *, limit: int = 260, label: str = "") -> Dict[str, Any]:

@@ -96,9 +96,110 @@ def test_dic_assembler_outputs_500_word_context_when_context_is_available() -> N
     assert context.structured_answer["summary"].startswith("GitHub")
     assert context.structured_answer["sections"]
     assert context.structured_answer["citation_spine"]
-    assert context.structured_answer["key_points"][0]["source"]["url"].startswith("https://")
+    assert isinstance(context.structured_answer["key_points"][0], str)
+    assert isinstance(context.structured_answer["sections"][0]["points"][0], str)
+    assert context.structured_answer["capabilities"][0]["source_id"].startswith("S")
+    assert "evidence" not in context.structured_answer["capabilities"][0]
     assert context.structured_answer["citation_spine"][0]["markdown"].startswith("[")
     assert context.query_trace["expansion_count"] == 5
+
+
+def test_dic_structured_answer_shape_stays_readable_across_query_mix() -> None:
+    subjects = [
+        "GitHub",
+        "Google",
+        "Kubernetes",
+        "PostgreSQL",
+        "Rust",
+        "Python",
+        "Linux",
+        "Docker",
+        "React",
+        "TypeScript",
+        "OpenTelemetry",
+        "Redis",
+        "SQLite",
+        "GraphQL",
+        "Terraform",
+        "Ansible",
+        "Prometheus",
+        "Kafka",
+        "Nginx",
+        "WebAssembly",
+        "OAuth",
+        "TLS",
+        "DNS",
+        "HTTP",
+        "Git",
+        "CI/CD",
+        "Vector databases",
+        "Semantic search",
+        "Machine learning",
+        "Neural networks",
+        "Transformers",
+        "MCP",
+        "gRPC",
+        "PageRank",
+        "Bloom filters",
+        "Mamba SSM",
+        "CUDA",
+        "Wikipedia",
+        "Reuters",
+        "Wayback Machine",
+    ]
+    assembler = DirectlyInjectContextAssembler()
+    expansion = QueryExpansionEngine().expand("what is github", requested_limit=3)
+    for index, subject in enumerate(subjects, start=1):
+        text = (
+            f"{subject} is a technology system that helps developers create, store, manage, and share code or operational knowledge. "
+            f"It uses Git-style version control ideas, access control, bug tracking, feature requests, task management, continuous integration, and documentation workflows. "
+            f"Teams use {subject} to coordinate projects, review changes, publish documentation, and maintain reliable release histories. "
+        ) * 8
+        blocks = [
+            {
+                "url": f"https://example.org/{index}",
+                "domain": "wikipedia.org",
+                "title": subject,
+                "text": text,
+                "score": 20.0,
+                "rank": 1,
+                "topology_class": "GENERIC_HTML",
+            }
+        ]
+        context = assembler.assemble(query=f"what is {subject}", ranked_blocks=blocks, expansion=expansion, veritas={"counts": {}})
+        structured = context.structured_answer
+        assert isinstance(structured["key_points"][0], str)
+        assert isinstance(structured["sections"][0]["points"][0], str)
+        assert structured["capabilities"]
+        assert all("evidence" not in card and "name_source" not in card for card in structured["capabilities"])
+        assert all(isinstance(section["points"][0], str) for section in structured["sections"] if section["points"])
+        assert structured["citation_spine"][0]["id"] == "S1"
+        assert structured["citation_spine"][0]["markdown"].startswith("[")
+
+
+def test_dic_summary_prefers_exact_subject_definition_over_related_entity() -> None:
+    text = (
+        "Google Search and YouTube are the two most-visited websites worldwide. "
+        "Google is the largest provider of search engines, mapping and navigation applications, email services, office suites, online video platforms, photo and cloud storage, mobile operating systems, web browsers, machine learning frameworks, and AI virtual assistants. "
+        "Google was founded in 1998 by Larry Page and Sergey Brin. "
+    ) * 6
+    blocks = [
+        {
+            "url": "https://en.wikipedia.org/wiki/Google",
+            "domain": "en.wikipedia.org",
+            "title": "Google",
+            "text": text,
+            "score": 20.0,
+            "rank": 1,
+            "topology_class": "GENERIC_HTML",
+        }
+    ]
+    expansion = QueryExpansionEngine().expand("what is google", requested_limit=1)
+    context = DirectlyInjectContextAssembler().assemble(query="what is google", ranked_blocks=blocks, expansion=expansion, veritas={"counts": {}})
+    structured = context.structured_answer
+    assert structured["summary"].startswith("Google is the largest provider")
+    assert [section["title"] for section in structured["sections"][:4]] == ["What It Is", "Key Facts", "Background", "Why It Matters"]
+    assert all(isinstance(section["points"][0], str) for section in structured["sections"] if section["points"])
 
 
 def test_native_runtime_exports_dic_and_veritas_primitives(tmp_path: Path) -> None:

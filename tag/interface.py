@@ -1895,6 +1895,8 @@ def parse_command(line: str) -> ParsedCommand:
     stripped = line.strip()
     if stripped.lower() == "axiom":
         return ParsedCommand(command="STATUS", payload="")
+    if stripped.lower() in {"quit", "exit", ":q"}:
+        return ParsedCommand(command="QUIT", payload="")
     if "|" not in stripped:
         if stripped:
             return ParsedCommand(command="SEARCH", payload=stripped)
@@ -2115,7 +2117,7 @@ def _format_clean_result(response: InterfaceResponse, elapsed_s: float) -> str:
         }, indent=2, ensure_ascii=False)
 
     if answer and isinstance(answer.get("structured"), dict):
-        structured = dict(answer.get("structured") or {})
+        structured = _ordered_structured_answer(dict(answer.get("structured") or {}))
         sources = answer.get("sources") if isinstance(answer.get("sources"), list) else []
         if not sources and answer.get("source"):
             sources = [answer["source"]]
@@ -2166,6 +2168,25 @@ def _format_clean_result(response: InterfaceResponse, elapsed_s: float) -> str:
         "time_taken_s": round(elapsed_s, 3),
         "run_id": response.run_id,
     }, indent=2, ensure_ascii=False)
+
+
+def _ordered_structured_answer(structured: Dict[str, Any]) -> Dict[str, Any]:
+    order = (
+        "summary",
+        "summary_source_id",
+        "summary_source",
+        "key_points",
+        "capabilities",
+        "sections",
+        "distinctions",
+        "verification",
+        "citation_spine",
+    )
+    ordered = {key: structured[key] for key in order if key in structured}
+    for key, value in structured.items():
+        if key not in ordered:
+            ordered[key] = value
+    return ordered
 
 
 def _capture_preview(buffer: io.StringIO) -> Dict[str, Any]:

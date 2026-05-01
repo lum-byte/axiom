@@ -22,7 +22,7 @@ from signal_kernel.contracts import InterfaceResponse
 from tag.config import AxiomConfig, load_config
 
 
-CACHE_VERSION = 10
+CACHE_VERSION = 13
 
 
 @dataclass(frozen=True)
